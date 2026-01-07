@@ -19,6 +19,8 @@ import Handovers from "@/pages/Handovers";
 import Library from "@/pages/Library";
 import Finance from "@/pages/Finance";
 import AIChat from "@/pages/AIChat";
+import PaymentRequired from "@/pages/PaymentRequired";
+import Admin from "@/pages/Admin";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -34,10 +36,32 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"/></div>;
   if (!isAuthenticated) return <Redirect to="/welcome" />;
+
+  // Payment Lock (except for Admin)
+  if (user?.status !== 'active' && user?.role !== 'admin') {
+    return <PaymentRequired />;
+  }
+
+  return (
+    <ProtectedLayout>
+      <Component />
+    </ProtectedLayout>
+  );
+}
+
+function AdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"/></div>;
+  if (!isAuthenticated) return <Redirect to="/welcome" />;
+  
+  if (user?.role !== 'admin') {
+    return <Redirect to="/" />;
+  }
 
   return (
     <ProtectedLayout>
@@ -51,6 +75,10 @@ function Router() {
     <Switch>
       <Route path="/welcome" component={Landing} />
       
+      <Route path="/admin">
+        <AdminRoute component={Admin} />
+      </Route>
+
       <Route path="/">
         <ProtectedRoute component={Dashboard} />
       </Route>

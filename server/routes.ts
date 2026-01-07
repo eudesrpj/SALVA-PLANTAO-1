@@ -6,6 +6,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
+import { authStorage } from "./replit_integrations/auth/storage";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -17,24 +18,68 @@ export async function registerRoutes(
   registerChatRoutes(app);
   registerImageRoutes(app);
 
-  // Helper to get userId
+  // Helper to get userId and check roles
   const getUserId = (req: any) => req.user?.claims?.sub;
+  
+  const checkAdmin = async (req: any, res: any, next: any) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const user = await authStorage.getUser(userId);
+    if (user?.role !== "admin") return res.status(403).json({ message: "Forbidden: Admin only" });
+    next();
+  };
+
+  const checkActive = async (req: any, res: any, next: any) => {
+     const userId = getUserId(req);
+     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+     const user = await authStorage.getUser(userId);
+     if (user?.status !== "active" && user?.role !== "admin") {
+        return res.status(403).json({ message: "Account pending payment or blocked" });
+     }
+     next();
+  };
+
+  // --- Admin Routes ---
+  app.get("/api/admin/users", isAuthenticated, checkAdmin, async (req, res) => {
+    const users = await authStorage.getAllUsers();
+    res.json(users);
+  });
+
+  app.patch("/api/admin/users/:id/status", isAuthenticated, checkAdmin, async (req, res) => {
+    const { status } = req.body;
+    const user = await authStorage.updateUserStatus(req.params.id, status);
+    res.json(user);
+  });
+
+  app.patch("/api/admin/users/:id/role", isAuthenticated, checkAdmin, async (req, res) => {
+    const { role } = req.body;
+    const user = await authStorage.updateUserRole(req.params.id, role);
+    res.json(user);
+  });
 
   // --- Prescriptions ---
-  app.get(api.prescriptions.list.path, isAuthenticated, async (req, res) => {
+  app.get(api.prescriptions.list.path, isAuthenticated, checkActive, async (req, res) => {
     const items = await storage.getPrescriptions(getUserId(req));
     res.json(items);
   });
 
-  app.get(api.prescriptions.get.path, isAuthenticated, async (req, res) => {
+  app.get(api.prescriptions.get.path, isAuthenticated, checkActive, async (req, res) => {
     const item = await storage.getPrescription(Number(req.params.id));
     if (!item) return res.status(404).json({ message: "Not found" });
     res.json(item);
   });
 
-  app.post(api.prescriptions.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.prescriptions.create.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.prescriptions.create.input.parse(req.body);
+      const userId = getUserId(req);
+      
+      // Admin check for public items
+      if (input.isPublic) {
+         const user = await authStorage.getUser(userId);
+         if (user?.role !== "admin") return res.status(403).json({ message: "Only admins can create public prescriptions" });
+      }
+
       // Enforce userId
       const item = await storage.createPrescription({ ...input, userId: getUserId(req) });
       res.status(201).json(item);
@@ -44,9 +89,10 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.prescriptions.update.path, isAuthenticated, async (req, res) => {
+  app.put(api.prescriptions.update.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.prescriptions.update.input.parse(req.body);
+      // TODO: Add ownership check or admin check
       const item = await storage.updatePrescription(Number(req.params.id), input);
       res.json(item);
     } catch (err) {
@@ -55,26 +101,35 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.prescriptions.delete.path, isAuthenticated, async (req, res) => {
+  app.delete(api.prescriptions.delete.path, isAuthenticated, checkActive, async (req, res) => {
+    // TODO: Add ownership check or admin check
     await storage.deletePrescription(Number(req.params.id));
     res.status(204).send();
   });
 
   // --- Checklists ---
-  app.get(api.checklists.list.path, isAuthenticated, async (req, res) => {
+  app.get(api.checklists.list.path, isAuthenticated, checkActive, async (req, res) => {
     const items = await storage.getChecklists(getUserId(req));
     res.json(items);
   });
 
-  app.get(api.checklists.get.path, isAuthenticated, async (req, res) => {
+  app.get(api.checklists.get.path, isAuthenticated, checkActive, async (req, res) => {
     const item = await storage.getChecklist(Number(req.params.id));
     if (!item) return res.status(404).json({ message: "Not found" });
     res.json(item);
   });
 
-  app.post(api.checklists.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.checklists.create.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.checklists.create.input.parse(req.body);
+      const userId = getUserId(req);
+
+      // Admin check for public items
+      if (input.isPublic) {
+         const user = await authStorage.getUser(userId);
+         if (user?.role !== "admin") return res.status(403).json({ message: "Only admins can create public checklists" });
+      }
+
       const item = await storage.createChecklist({ ...input, userId: getUserId(req) });
       res.status(201).json(item);
     } catch (err) {
@@ -83,7 +138,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.checklists.update.path, isAuthenticated, async (req, res) => {
+  app.put(api.checklists.update.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.checklists.update.input.parse(req.body);
       const item = await storage.updateChecklist(Number(req.params.id), input);
@@ -94,18 +149,18 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.checklists.delete.path, isAuthenticated, async (req, res) => {
+  app.delete(api.checklists.delete.path, isAuthenticated, checkActive, async (req, res) => {
     await storage.deleteChecklist(Number(req.params.id));
     res.status(204).send();
   });
 
   // --- Shifts ---
-  app.get(api.shifts.list.path, isAuthenticated, async (req, res) => {
+  app.get(api.shifts.list.path, isAuthenticated, checkActive, async (req, res) => {
     const items = await storage.getShifts(getUserId(req));
     res.json(items);
   });
 
-  app.post(api.shifts.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.shifts.create.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.shifts.create.input.parse(req.body);
       const item = await storage.createShift({ ...input, userId: getUserId(req) });
@@ -116,7 +171,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.shifts.update.path, isAuthenticated, async (req, res) => {
+  app.put(api.shifts.update.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.shifts.update.input.parse(req.body);
       const item = await storage.updateShift(Number(req.params.id), input);
@@ -127,23 +182,23 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.shifts.delete.path, isAuthenticated, async (req, res) => {
+  app.delete(api.shifts.delete.path, isAuthenticated, checkActive, async (req, res) => {
     await storage.deleteShift(Number(req.params.id));
     res.status(204).send();
   });
 
-  app.get(api.shifts.stats.path, isAuthenticated, async (req, res) => {
+  app.get(api.shifts.stats.path, isAuthenticated, checkActive, async (req, res) => {
     const stats = await storage.getShiftStats(getUserId(req));
     res.json(stats);
   });
 
   // --- Notes ---
-  app.get(api.notes.list.path, isAuthenticated, async (req, res) => {
+  app.get(api.notes.list.path, isAuthenticated, checkActive, async (req, res) => {
     const items = await storage.getNotes(getUserId(req));
     res.json(items);
   });
 
-  app.post(api.notes.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.notes.create.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.notes.create.input.parse(req.body);
       const item = await storage.createNote({ ...input, userId: getUserId(req) });
@@ -154,7 +209,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.notes.update.path, isAuthenticated, async (req, res) => {
+  app.put(api.notes.update.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.notes.update.input.parse(req.body);
       const item = await storage.updateNote(Number(req.params.id), input);
@@ -165,18 +220,18 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.notes.delete.path, isAuthenticated, async (req, res) => {
+  app.delete(api.notes.delete.path, isAuthenticated, checkActive, async (req, res) => {
     await storage.deleteNote(Number(req.params.id));
     res.status(204).send();
   });
 
   // --- Library ---
-  app.get(api.library.categories.list.path, isAuthenticated, async (req, res) => {
+  app.get(api.library.categories.list.path, isAuthenticated, checkActive, async (req, res) => {
     const items = await storage.getLibraryCategories();
     res.json(items);
   });
 
-  app.post(api.library.categories.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.library.categories.create.path, isAuthenticated, checkAdmin, async (req, res) => {
     try {
       const input = api.library.categories.create.input.parse(req.body);
       const item = await storage.createLibraryCategory(input);
@@ -187,13 +242,13 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.library.items.list.path, isAuthenticated, async (req, res) => {
+  app.get(api.library.items.list.path, isAuthenticated, checkActive, async (req, res) => {
     const categoryId = Number(req.query.categoryId);
     const items = await storage.getLibraryItems(categoryId);
     res.json(items);
   });
 
-  app.post(api.library.items.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.library.items.create.path, isAuthenticated, checkAdmin, async (req, res) => {
     try {
       const input = api.library.items.create.input.parse(req.body);
       const item = await storage.createLibraryItem(input);
@@ -205,12 +260,12 @@ export async function registerRoutes(
   });
 
   // --- Handovers (Passagem de Plantão) ---
-  app.get(api.handovers.list.path, isAuthenticated, async (req, res) => {
+  app.get(api.handovers.list.path, isAuthenticated, checkActive, async (req, res) => {
     const items = await storage.getHandovers(getUserId(req));
     res.json(items);
   });
 
-  app.post(api.handovers.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.handovers.create.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.handovers.create.input.parse(req.body);
       const item = await storage.createHandover({ ...input, userId: getUserId(req) });
@@ -221,7 +276,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.handovers.update.path, isAuthenticated, async (req, res) => {
+  app.put(api.handovers.update.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.handovers.update.input.parse(req.body);
       const item = await storage.updateHandover(Number(req.params.id), input);
@@ -232,20 +287,20 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.handovers.delete.path, isAuthenticated, async (req, res) => {
+  app.delete(api.handovers.delete.path, isAuthenticated, checkActive, async (req, res) => {
     await storage.deleteHandover(Number(req.params.id));
     res.status(204).send();
   });
 
   // --- Goals ---
-  app.get(api.goals.get.path, isAuthenticated, async (req, res) => {
+  app.get(api.goals.get.path, isAuthenticated, checkActive, async (req, res) => {
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const item = await storage.getGoal(getUserId(req), currentMonth);
     res.json(item || null);
   });
 
-  app.post(api.goals.set.path, isAuthenticated, async (req, res) => {
+  app.post(api.goals.set.path, isAuthenticated, checkActive, async (req, res) => {
     try {
       const input = api.goals.set.input.parse(req.body);
       const item = await storage.setGoal({ ...input, userId: getUserId(req) });

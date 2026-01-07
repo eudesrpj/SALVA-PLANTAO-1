@@ -16,7 +16,8 @@ import {
   Menu,
   Stethoscope,
   Activity,
-  DollarSign
+  DollarSign,
+  Shield
 } from "lucide-react";
 import { useState } from "react";
 
@@ -28,14 +29,14 @@ const NAV_ITEMS = [
   { icon: CalendarDays, label: "Plantões", href: "/shifts" },
   { icon: DollarSign, label: "Financeiro", href: "/finance" },
   { icon: Activity, label: "Interconsulta IA", href: "/ai-chat" },
-  { icon: MessageSquareText, label: "Chat", href: "/chat" }, // Placeholder chat route
+  { icon: MessageSquareText, label: "Chat", href: "/chat" }, 
   { icon: Library, label: "Biblioteca", href: "/library" },
   { icon: StickyNote, label: "Anotações", href: "/notes" },
 ];
 
 function NavContent({ onClose }: { onClose?: () => void }) {
   const [location] = useLocation();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   return (
     <div className="flex flex-col h-full bg-slate-900 text-slate-100">
@@ -66,6 +67,23 @@ function NavContent({ onClose }: { onClose?: () => void }) {
             </Link>
           );
         })}
+
+        {user?.role === 'admin' && (
+          <Link href="/admin">
+            <div
+              onClick={onClose}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group mt-4 border border-amber-900/50",
+                location === '/admin'
+                  ? "bg-amber-900/20 text-amber-400 shadow-lg shadow-amber-900/10 font-semibold"
+                  : "text-amber-500/70 hover:bg-amber-900/20 hover:text-amber-400"
+              )}
+            >
+              <Shield className={cn("h-5 w-5", location === '/admin' ? "animate-pulse" : "group-hover:text-amber-400")} />
+              <span>Administrador</span>
+            </div>
+          </Link>
+        )}
       </nav>
 
       <div className="p-4 border-t border-slate-800">

@@ -1,15 +1,21 @@
 ## Packages
-recharts | For financial charts and statistics
-framer-motion | For smooth animations and page transitions
-date-fns | For date manipulation and formatting
-react-day-picker | For calendar component (dependency of shadcn calendar)
-lucide-react | For icons
-clsx | For conditional class names
-tailwind-merge | For merging tailwind classes
+recharts | Financial charts
+framer-motion | Animations for page transitions and modals
+date-fns | Date formatting
+react-day-picker | Calendar component
+lucide-react | Icons
+clsx | Class merging
+tailwind-merge | Class merging
+@radix-ui/react-dialog | Modal primitives
+@radix-ui/react-slot | Component composition
+@radix-ui/react-tabs | Tab interfaces
+@radix-ui/react-switch | Toggles for admin panel
+@radix-ui/react-label | Form labels
+@radix-ui/react-select | Dropdowns
+@radix-ui/react-scroll-area | Custom scrollbars
 
 ## Notes
-- Auth is handled via Replit Auth (use-auth.ts)
-- AI Chat uses SSE streaming at /api/conversations/:id/messages
-- Medical calculator accessible via floating button
-- Handovers use SBAR methodology
-- Shifts have financial tracking and goal setting
+- Admin features assume `user.role === 'admin'` and `user.status` fields (mocked or real).
+- Payment lock screen intercepts access for `user.status === 'pending'`.
+- "Pix" payment flow is manual (show QR code/key, user contacts admin, admin approves).
+- Prescriptions page includes rich filtering and "Favorites" (local or DB).

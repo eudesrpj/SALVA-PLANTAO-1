@@ -44,6 +44,27 @@ export function useCreateShift() {
   });
 }
 
+export function useUpdateShift() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: UpdateShiftRequest & { id: number }) => {
+      const url = buildUrl(api.shifts.update.path, { id });
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update shift");
+      return api.shifts.update.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.shifts.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.shifts.stats.path] });
+    },
+  });
+}
+
 export function useDeleteShift() {
   const queryClient = useQueryClient();
   return useMutation({
