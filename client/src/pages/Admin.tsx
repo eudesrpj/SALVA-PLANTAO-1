@@ -6098,6 +6098,11 @@ function DashboardConfigTab() {
 
   const { data: checklists } = useQuery<any[]>({
     queryKey: ["/api/checklists"],
+    queryFn: async () => {
+      const res = await fetch("/api/checklists", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    }
   });
 
   useEffect(() => {

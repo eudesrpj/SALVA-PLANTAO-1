@@ -15,6 +15,18 @@ import { setupWebSocket } from "./websocket";
 const app = express();
 const httpServer = createServer(app);
 
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Não fazer exit em dev para não quebrar o servidor
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Não fazer exit em dev para não quebrar o servidor
+});
+
 // Setup WebSocket server for real-time notifications
 setupWebSocket(httpServer);
 
@@ -34,6 +46,34 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// Health check endpoint - FIRST MIDDLEWARE, before anything else
+app.get("/health", (_req, res) => {
+  console.log("[DEBUG] /health endpoint called");
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    auth: "independent",
+    node: process.version,
+  });
+});
+
+// DEBUG: Listen state endpoint (PASSO 3)
+let serverInstance: any = null;
+app.get("/_debug/listen", (_req, res) => {
+  try {
+    const addr = serverInstance?.address?.() || "unknown";
+    res.json({
+      pid: process.pid,
+      port: parseInt(process.env.PORT || "5000", 10),
+      envPort: process.env.PORT || null,
+      address: addr,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -45,68 +85,72 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
+console.log("Iniciando servidor...");
 
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
+// Register routes NOW (before listen)
+try {
+  registerRoutes(app);
+  console.log("[DEBUG] Routes registered successfully");
+} catch (error) {
+  console.error("[ERROR] Failed to register routes:", error);
+}
 
-      log(logLine);
-    }
-  });
+// Setup error handler NOW
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
 
-  next();
+  console.error("[DEBUG] Error handler invoked:", err);
+  
+  if (!res.headersSent) {
+    res.status(status).json({ message });
+  }
 });
 
-(async () => {
-  await registerRoutes(httpServer, app);
+// Setup static file serving NOW
+try {
+  serveStatic(app);
+  console.log("[DEBUG] Static file configuration complete");
+} catch (error) {
+  console.error("[WARNING] Failed to configure static files:", error);
+}
 
-  // Health check endpoint
-  app.get("/health", (_req, res) => {
-    res.json({
-      status: "ok",
-      timestamp: new Date().toISOString(),
-      auth: "independent",
-      node: process.version,
-    });
-  });
+// ===== DIRECT LISTEN (proven working pattern) =====
+const port = parseInt(process.env.PORT || "5000", 10);
+const host = "0.0.0.0";
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+console.log("[DEBUG] About to call httpServer.listen...");
 
-    res.status(status).json({ message });
-    throw err;
-  });
-
-  // Setup Vite only in development
-  if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
-  } else {
-    const { setupVite } = await import("./vite");
-    await setupVite(httpServer, app);
+// Setup error handlers BEFORE listening
+httpServer.on('error', (error: any) => {
+  console.error('[CRITICAL] HTTP Server error event:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`[CRITICAL] Port ${port} is already in use!`);
+    process.exit(1);
   }
+});
 
-  // Use PORT from environment or fallback to 5000
-  const port = parseInt(process.env.PORT || "5000", 10);
+httpServer.listen(port, host, () => {
+  console.log(`\n========== SERVER LISTENING ==========`);
+  console.log(`✅ listening on ${host}:${port}`);
+  console.log(`✅ Process ${process.pid} is ready for requests`);
+  console.log(`========== SERVER READY ===========\n`);
+});
 
-  // In production (Render), listen on all interfaces; in development, use localhost
-  const host = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+// Capture server reference for debug endpoint
+serverInstance = httpServer;
 
-  httpServer.listen(port, host, () => {
-    log(`serving on ${host}:${port}`);
-  });
-})();
+// Keep process alive
+httpServer.on('close', () => {
+  console.log('⚠️  Server closed event fired');
+});
+
+process.on('beforeExit', (code) => {
+  console.log('⚠️  Process beforeExit with code:', code);
+});
+
+process.on('exit', (code) => {
+  console.log('⚠️  Process exit with code:', code);
+});
+

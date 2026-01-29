@@ -1,17 +1,27 @@
-export function isUnauthorizedError(error: Error): boolean {
-  return /^401: .*Unauthorized/.test(error.message);
+// client/src/lib/auth-utils.ts
+export function redirectToLogin(nextPath?: string) {
+  const next =
+    nextPath ??
+    (typeof window !== "undefined"
+      ? window.location.pathname + window.location.search
+      : "/");
+
+  const params = new URLSearchParams();
+  if (next && next !== "/login") params.set("next", next);
+
+  window.location.href = `/login${params.toString() ? `?${params}` : ""}`;
 }
 
-// Redirect to login with a toast notification
-export function redirectToLogin(toast?: (options: { title: string; description: string; variant: string }) => void) {
-  if (toast) {
-    toast({
-      title: "Unauthorized",
-      description: "You are logged out. Logging in again...",
-      variant: "destructive",
+export async function logoutAndRedirect() {
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
     });
+  } catch {
+    // se falhar, ainda assim força redirect
+  } finally {
+    window.location.href = "/login";
   }
-  setTimeout(() => {
-    window.location.href = "/api/login";
-  }, 500);
 }

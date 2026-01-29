@@ -61,3 +61,16 @@ export function useDeleteTask() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.tasks.list.path] }),
   });
 }
+
+export function useUpdateTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, isCompleted }: { id: number; isCompleted: boolean }) => {
+      const url = buildUrl(api.tasks.toggle.path, { id });
+      const res = await fetch(url, { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to update task");
+      return api.tasks.toggle.responses[200].parse(await res.json());
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.tasks.list.path] }),
+  });
+}

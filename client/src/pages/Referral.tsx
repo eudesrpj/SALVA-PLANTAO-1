@@ -74,10 +74,38 @@ export default function Referral() {
     clinicalHistory: templates[0].content,
   });
 
-  const { data: doctorProfile } = useQuery<DoctorProfile>({ queryKey: ["/api/doctor-profile"] });
-  const { data: referrals = [] } = useQuery<Referral[]>({ queryKey: ["/api/medical-referrals"] });
-  const { data: destinations = [] } = useQuery<ReferralDestination[]>({ queryKey: ["/api/referral-destinations"] });
-  const { data: reasons = [] } = useQuery<ReferralReason[]>({ queryKey: ["/api/referral-reasons"] });
+  const { data: doctorProfile } = useQuery<DoctorProfile>({ 
+    queryKey: ["/api/doctor-profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/doctor-profile", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    }
+  });
+  const { data: referrals = [] } = useQuery<Referral[]>({ 
+    queryKey: ["/api/medical-referrals"],
+    queryFn: async () => {
+      const res = await fetch("/api/medical-referrals", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    }
+  });
+  const { data: destinations = [] } = useQuery<ReferralDestination[]>({ 
+    queryKey: ["/api/referral-destinations"],
+    queryFn: async () => {
+      const res = await fetch("/api/referral-destinations", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    }
+  });
+  const { data: reasons = [] } = useQuery<ReferralReason[]>({ 
+    queryKey: ["/api/referral-reasons"],
+    queryFn: async () => {
+      const res = await fetch("/api/referral-reasons", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    }
+  });
 
   useEffect(() => {
     localStorage.setItem("referral_templates", JSON.stringify(templates));

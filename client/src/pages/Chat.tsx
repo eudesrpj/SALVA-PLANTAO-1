@@ -75,31 +75,63 @@ export default function Chat() {
   const [newUf, setNewUf] = useState<string>("");
 
   const { data: user } = useQuery<UserProfile>({
-    queryKey: ["/api/auth/user"],
+    queryKey: ["/api/auth/me"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    }
   });
 
   const { data: rooms = [], refetch: refetchRooms } = useQuery<ChatRoom[]>({
     queryKey: ["/api/chat/rooms"],
+    queryFn: async () => {
+      const res = await fetch("/api/chat/rooms", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
     enabled: !!user?.chatTermsAcceptedAt,
   });
 
   const { data: messages = [], refetch: refetchMessages } = useQuery<ChatMessage[]>({
     queryKey: ["/api/chat/rooms", selectedRoom?.id, "messages"],
+    queryFn: async () => {
+      if (!selectedRoom) return [];
+      const res = await fetch(`/api/chat/rooms/${selectedRoom.id}/messages`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
     enabled: !!selectedRoom,
   });
 
   const { data: contacts = [] } = useQuery<any[]>({
     queryKey: ["/api/chat/contacts"],
+    queryFn: async () => {
+      const res = await fetch("/api/chat/contacts", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
     enabled: !!user?.chatTermsAcceptedAt,
   });
 
   const { data: searchResults = [] } = useQuery<any[]>({
     queryKey: ["/api/chat/search-users", { q: searchQuery }],
+    queryFn: async () => {
+      const res = await fetch(`/api/chat/search-users?q=${encodeURIComponent(searchQuery)}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
     enabled: showSearch && searchQuery.length >= 2,
   });
 
   const { data: canChangeUfData } = useQuery<{ canChange: boolean; daysRemaining?: number }>({
     queryKey: ["/api/chat/can-change-uf"],
+    queryFn: async () => {
+      const res = await fetch("/api/chat/can-change-uf", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
     enabled: !!user?.chatTermsAcceptedAt,
   });
 
@@ -148,7 +180,7 @@ export default function Chat() {
       return await apiRequest("POST", "/api/chat/accept-terms", { uf: selectedUf });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setShowTerms(false);
       toast({ title: "Termos aceitos", description: "Você agora pode usar o chat." });
     },
@@ -192,7 +224,7 @@ export default function Chat() {
       return await apiRequest("POST", "/api/chat/change-uf", { uf });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/chat/rooms"] });
       queryClient.invalidateQueries({ queryKey: ["/api/chat/can-change-uf"] });
       setShowChangeUf(false);

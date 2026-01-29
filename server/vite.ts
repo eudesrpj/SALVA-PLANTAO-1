@@ -8,31 +8,54 @@ import { nanoid } from "nanoid";
 
 const viteLogger = createLogger();
 
+/**
+ * Detecta se é asset estático (para não cair no fallback SPA)
+ */
+function isStaticAsset(url: string) {
+  return (
+    url.startsWith("/assets/") ||
+    url.startsWith("/favicon") ||
+    url.startsWith("/robots.txt") ||
+    url.startsWith("/manifest") ||
+    url.startsWith("/icons/") ||
+    url.endsWith(".js") ||
+    url.endsWith(".css") ||
+    url.endsWith(".map") ||
+    url.endsWith(".png") ||
+    url.endsWith(".jpg") ||
+    url.endsWith(".jpeg") ||
+    url.endsWith(".svg") ||
+    url.endsWith(".ico") ||
+    url.endsWith(".webp") ||
+    url.endsWith(".txt")
+  );
+}
+
 export async function setupVite(server: Server, app: Express) {
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server, path: "/vite-hmr" },
-    allowedHosts: true as const,
+    hmr: false, // Desabilitar HMR automático que está causando erro
   };
 
   const vite = await createViteServer({
     ...viteConfig,
     configFile: false,
-    customLogger: {
-      ...viteLogger,
-      error: (msg, options) => {
-        viteLogger.error(msg, options);
-        process.exit(1);
-      },
-    },
     server: serverOptions,
     appType: "custom",
   });
 
+  // Middlewares do Vite (HMR, transforms, assets)
   app.use(vite.middlewares);
 
+  // 🧠 SPA fallback (DEV)
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
+
+    // Backend responde essas rotas
+    if (url.startsWith("/api") || url.startsWith("/health")) return next();
+
+    // Vite cuida disso
+    if (url.startsWith("/vite-hmr") || isStaticAsset(url)) return next();
 
     try {
       const clientTemplate = path.resolve(
@@ -42,17 +65,24 @@ export async function setupVite(server: Server, app: Express) {
         "index.html",
       );
 
-      // always reload the index.html file from disk incase it changes
+      // Sempre recarrega o HTML (dev)
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
+
+      // Bust de cache do entrypoint
       template = template.replace(
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
-      const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
-    } catch (e) {
-      vite.ssrFixStacktrace(e as Error);
-      next(e);
+
+      const html = await vite.transformIndexHtml(url, template);
+
+      res
+        .status(200)
+        .setHeader("Content-Type", "text/html")
+        .end(html);
+    } catch (err) {
+      vite.ssrFixStacktrace(err as Error);
+      next(err);
     }
   });
 }

@@ -99,8 +99,8 @@ export function setAuthCookies(res: Response, userId: string): void {
   const refreshToken = createToken(userId, true);
   
   const isProduction = process.env.NODE_ENV === "production";
-  const sameSite = isProduction ? "strict" : "lax";
-  const secure = isProduction;
+  const sameSite = isProduction ? "strict" : "lax"; // lax permite cookies cross-site em dev
+  const secure = false; // false em dev (localhost não é HTTPS)
   
   res.cookie(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
@@ -117,6 +117,8 @@ export function setAuthCookies(res: Response, userId: string): void {
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
+  
+  console.log(`🍪 Cookies setados para ${userId}`);
 }
 
 /**
@@ -372,6 +374,7 @@ export function registerIndependentAuthRoutes(app: Express): void {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        status: user.status,
         profileImageUrl: user.profileImageUrl,
       });
     } catch (error) {

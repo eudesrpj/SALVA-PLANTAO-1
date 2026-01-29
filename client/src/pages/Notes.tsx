@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNotes, useCreateNote, useDeleteNote } from "@/hooks/use-notes";
-import { useTasks, useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/use-tasks";
+import { useTasks, useCreateTask, useToggleTask, useDeleteTask, useUpdateTask } from "@/hooks/use-tasks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,7 @@ export default function Notes() {
   const createTask = useCreateTask();
   const toggleTask = useToggleTask();
   const delTask = useDeleteTask();
+  const updateTask = useUpdateTask();
   
   const [noteOpen, setNoteOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
@@ -149,9 +150,14 @@ export default function Notes() {
             {pendingTasks.map(task => (
               <Card key={task.id} className="p-4" data-testid={`card-task-${task.id}`}>
                 <div className="flex items-start gap-3">
-                  <Checkbox 
-                    checked={task.isCompleted}
-                    onCheckedChange={() => toggleTask.mutate(task.id)}
+                  <Checkbox
+                    checked={!!task.isCompleted}
+                    onCheckedChange={(checked) => {
+                      updateTask.mutate({
+                        id: task.id,
+                        isCompleted: checked === true,
+                      });
+                    }}
                     data-testid={`checkbox-task-complete-${task.id}`}
                   />
                   <div className="flex-1 min-w-0">
@@ -209,7 +215,7 @@ export default function Notes() {
                 <Card key={task.id} className="p-4 opacity-60" data-testid={`card-task-completed-${task.id}`}>
                   <div className="flex items-start gap-3">
                     <Checkbox 
-                      checked={task.isCompleted}
+                      checked={!!task.isCompleted}
                       onCheckedChange={() => toggleTask.mutate(task.id)}
                       data-testid={`checkbox-task-uncomplete-${task.id}`}
                     />

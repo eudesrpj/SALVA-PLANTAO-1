@@ -1,5 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl, type Note, type NoteInput, type Shift, type ShiftInput, type Prescription, type PrescriptionInput, type Checklist, type ChecklistInput, type LibraryCategory, type LibraryItem, type Handover, type Goal } from "@shared/routes"; // Mocking explicit types from routes if not exported directly, assuming standard exports
+import { api, buildUrl } from "@shared/routes";
+import type {
+  Note,
+  NoteInput,
+  Shift,
+  ShiftInput,
+  Prescription,
+  PrescriptionInput,
+  Checklist,
+  ChecklistInput,
+  LibraryCategory,
+  LibraryItem,
+  Handover,
+  Goal,
+} from "@shared/types";
 
 // Generic fetcher (you can replace apiRequest with this logic if preferred)
 const fetcher = async (url: string) => {

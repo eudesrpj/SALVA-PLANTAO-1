@@ -51,18 +51,38 @@ export default function Evolution() {
 
   const { data: evolutionModels = [], isLoading: loadingModels } = useQuery<EvolutionModel[]>({
     queryKey: ["/api/evolution-models", selectedCategory],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/evolution-models");
+      return res.json();
+    },
+    enabled: true,
   });
 
   const { data: physicalExamTemplates = [] } = useQuery<PhysicalExamTemplate[]>({
     queryKey: ["/api/physical-exam-templates"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/physical-exam-templates");
+      return res.json();
+    },
+    enabled: true,
   });
 
   const { data: signsSymptoms = [] } = useQuery<SignsSymptoms[]>({
     queryKey: ["/api/signs-symptoms"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/signs-symptoms");
+      return res.json();
+    },
+    enabled: true,
   });
 
   const { data: semiologicalSigns = [] } = useQuery<SemiologicalSigns[]>({
     queryKey: ["/api/semiological-signs"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/semiological-signs");
+      return res.json();
+    },
+    enabled: true,
   });
 
   const createModelMutation = useMutation({

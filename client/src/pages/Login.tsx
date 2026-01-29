@@ -5,18 +5,21 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Loader2, ArrowLeft } from "lucide-react";
+import { Mail, Loader2, ArrowLeft, KeyRound } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { apiRequest } from "@/lib/queryClient";
+import { useQueryClient } from "@tanstack/react-query";
 
-type AuthStep = "email" | "code";
+type AuthStep = "email" | "code" | "password";
 
 export default function Login() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<AuthStep>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
@@ -49,10 +52,15 @@ export default function Login() {
     setIsLoading(true);
     try {
       await apiRequest("POST", "/api/auth/email/verify-code", { email, code });
+      
       toast({
         title: "Sucesso!",
         description: "Login realizado com sucesso"
       });
+      
+      // Aguardar refetch do usuário antes de navegar
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
+      
       navigate("/");
     } catch (error: any) {
       toast({
@@ -66,7 +74,36 @@ export default function Login() {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = "/api/login";
+    window.location.href = "/login";
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) return;
+
+    setIsLoading(true);
+    try {
+      const result = await apiRequest("POST", "/api/auth/login-password", { email, password });
+      
+      toast({
+        title: "Sucesso!",
+        description: "Login realizado com sucesso"
+      });
+      
+      // Invalidar cache e aguardar refetch antes de navegar
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
+      
+      navigate("/");
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Credenciais inválidas",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -79,7 +116,9 @@ export default function Login() {
           <CardDescription>
             {step === "email" 
               ? "Entre com seu email para acessar" 
-              : "Digite o codigo enviado para seu email"}
+              : step === "code"
+              ? "Digite o codigo enviado para seu email"
+              : "Login administrativo (dev)"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -134,6 +173,64 @@ export default function Login() {
                 <SiGoogle className="w-4 h-4 mr-2" />
                 Entrar com Google
               </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep("password")}
+                className="w-full mt-4 text-xs text-muted-foreground"
+                disabled={isLoading}
+              >
+                <KeyRound className="w-3 h-3 mr-1" />
+                Entrar com senha (dev)
+              </Button>
+            </>
+          ) : step === "password" ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep("email")}
+                className="mb-2"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Voltar
+              </Button>
+              
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pass-email">Email</Label>
+                  <Input
+                    id="pass-email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Senha</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={isLoading || !email || !password}
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : null}
+                  Entrar
+                </Button>
+              </form>
             </>
           ) : (
             <>

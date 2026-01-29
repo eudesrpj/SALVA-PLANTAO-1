@@ -3,4 +3,4 @@ export default {
     tailwindcss: {},
     autoprefixer: {},
   },
-}
+}// cria uma função que recebe dois números e retorna a média

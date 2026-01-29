@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useHandovers, useCreateHandover, useDeleteHandover } from "@/hooks/use-handovers";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,33 +11,26 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Handovers() {
   const { data: handovers, isLoading } = useHandovers();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const create = useCreateHandover();
   const del = useDeleteHandover();
   const { toast } = useToast();
+  const [selectedShift, setSelectedShift] = useState<number | null>(null);
+  const [content, setContent] = useState<string>("");
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    
-    try {
-      await create.mutateAsync({
-        patientName: formData.get("patientName") as string,
-        age: formData.get("age") as string,
-        diagnosis: formData.get("diagnosis") as string,
-        ward: formData.get("ward") as string,
-        bed: formData.get("bed") as string,
-        sbarSituation: formData.get("sbarSituation") as string,
-        sbarBackground: formData.get("sbarBackground") as string,
-        sbarAssessment: formData.get("sbarAssessment") as string,
-        sbarRecommendation: formData.get("sbarRecommendation") as string,
-        status: "active"
-      });
-      toast({ title: "Adicionado", description: "Paciente adicionado à passagem." });
-      setOpen(false);
-    } catch (error) {
-      toast({ title: "Erro", description: "Falha ao salvar.", variant: "destructive" });
-    }
+    if (!user?.id) return;
+
+    await create.mutateAsync({
+      userId: user.id,
+      patientName: content || "Sem nome",
+      status: "pending",
+    });
+    toast({ title: "Adicionado", description: "Paciente adicionado à passagem." });
+    setOpen(false);
+    setContent("");
   };
 
   const handleDelete = async (id: number) => {
@@ -44,6 +38,14 @@ export default function Handovers() {
       await del.mutateAsync(id);
       toast({ title: "Arquivado", description: "Paciente removido da lista ativa." });
     }
+  };
+
+  const handleShiftChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedShift(Number(e.target.value));
+  };
+
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
   };
 
   if (isLoading) return <div className="p-8">Carregando...</div>;

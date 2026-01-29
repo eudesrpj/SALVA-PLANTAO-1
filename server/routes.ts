@@ -9,7 +9,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { insertMonthlyExpenseSchema, insertFinancialGoalSchema } from "@shared/schema";
+import { insertMonthlyExpenseSchema, insertFinancialGoalSchema, userPreferences } from "@shared/schema";
 import { setupAuthMiddleware, registerIndependentAuthRoutes, authenticate } from "./auth/independentAuth";
 import { registerAuthRoutes } from "./auth/authRoutes";
 import { registerChatRoutes } from "./replit_integrations/chat";
@@ -19,24 +19,49 @@ import { registerBillingRoutes } from "./auth/billingRoutes";
 import { registerNewFeaturesRoutes } from "./routes/newFeaturesRoutes";
 import { registerUserProfileRoutes } from "./routes/userProfileRoutes";
 import { notifyUser, notifyAllAdmins, broadcastToRoom } from "./websocket";
+import { ensureAdminExists } from "./auth/ensureAdmin";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  console.log("[DEBUG] 1. Setting up auth middleware...");
   setupAuthMiddleware(app);
+  console.log("[DEBUG] 2. Registering independent auth routes...");
   registerIndependentAuthRoutes(app);
+  console.log("[DEBUG] 3. Registering auth routes...");
   registerAuthRoutes(app);
+  console.log("[DEBUG] 4. Registering billing routes...");
   registerBillingRoutes(app);
+  console.log("[DEBUG] 5. Registering chat routes...");
   registerChatRoutes(app);
+  console.log("[DEBUG] 6. Registering image routes...");
   registerImageRoutes(app);
+  console.log("[DEBUG] 7. Registering AI routes...");
   registerAiRoutes(app);
+  console.log("[DEBUG] 8. Registering new features routes...");
   registerNewFeaturesRoutes(app);
+  console.log("[DEBUG] 9. Registering user profile routes...");
   registerUserProfileRoutes(app);
   
   // Seed default plans on startup
-  await storage.upsertPlans().catch(err => console.error('Failed to seed plans:', err));
-  await storage.seedBillingPlans().catch(err => console.error('Failed to seed billing plans:', err));
+  console.log("[DEBUG] 10. Seeding plans...");
+  await Promise.race([
+    storage.upsertPlans().catch(err => console.error('Failed to seed plans:', err)),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Plans seed timeout")), 5000))
+  ]).catch(err => console.warn('Plans seed error/timeout:', err));
+  
+  console.log("[DEBUG] 11. Seeding billing plans...");
+  await Promise.race([
+    storage.seedBillingPlans().catch(err => console.error('Failed to seed billing plans:', err)),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Billing plans seed timeout")), 5000))
+  ]).catch(err => console.warn('Billing plans seed error/timeout:', err));
+  
+  // Garantir que admin existe no banco
+  console.log("[DEBUG] 12. Ensuring admin exists...");
+  await ensureAdminExists().catch(err => console.error('Failed to ensure admin:', err));
+  
+  console.log("[DEBUG] 13. Setting up route handlers...");
 
   const getUserId = (req: any) => req.userId;
   
@@ -4684,14 +4709,95 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
     res.json({ success: true });
   });
 
-  // --- Seed Data ---
-  await seedDatabase();
+  // --- User Preferences (Theme, Font, etc) ---
+  app.get("/api/user-preferences", authenticate, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      
+      // Get user preferences from database
+      const prefs = await storage.getUserPreferences(userId);
+      
+      // Return preferences or defaults
+      const defaultPrefs = {
+        theme: "light",
+        colorScheme: "blue",
+        fontSize: "medium",
+        compactMode: false,
+        notificationsEnabled: true,
+        emailNotifications: true,
+        soundEnabled: true,
+      };
+      
+      res.json(prefs || defaultPrefs);
+    } catch (error) {
+      console.error("Error getting preferences:", error);
+      res.status(500).json({ message: "Failed to get preferences" });
+    }
+  });
 
+  app.put("/api/user-preferences", authenticate, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+      
+      const { theme, colorScheme, fontSize, compactMode, notificationsEnabled, emailNotifications, soundEnabled } = req.body;
+      
+      // Validate inputs
+      const validThemes = ["light", "dark", "auto"];
+      const validSchemes = ["blue", "green", "purple", "orange", "red", "indigo", "pink", "cyan"];
+      const validSizes = ["small", "medium", "large", "xlarge"];
+      
+      if (theme && !validThemes.includes(theme)) {
+        return res.status(400).json({ message: "Invalid theme" });
+      }
+      if (colorScheme && !validSchemes.includes(colorScheme)) {
+        return res.status(400).json({ message: "Invalid color scheme" });
+      }
+      if (fontSize && !validSizes.includes(fontSize)) {
+        return res.status(400).json({ message: "Invalid font size" });
+      }
+      
+      // Update user preferences in database
+      const updates: Partial<typeof userPreferences.$inferInsert> = {};
+      if (theme !== undefined) updates.theme = theme;
+      if (colorScheme !== undefined) updates.colorScheme = colorScheme;
+      if (fontSize !== undefined) updates.fontSize = fontSize;
+      if (compactMode !== undefined) updates.compactMode = compactMode;
+      if (notificationsEnabled !== undefined) updates.notificationsEnabled = notificationsEnabled;
+      if (emailNotifications !== undefined) updates.emailNotifications = emailNotifications;
+      if (soundEnabled !== undefined) updates.soundEnabled = soundEnabled;
+      
+      const updatedPrefs = await storage.updateUserPreferences(userId, updates);
+      
+      res.json(updatedPrefs);
+    } catch (error) {
+      console.error("Error updating preferences:", error);
+      res.status(500).json({ message: "Failed to update preferences" });
+    }
+  });
+
+  // --- Seed Data ---
+  console.log("[DEBUG] 14. Starting seed database...");
+  try {
+    await Promise.race([
+      seedDatabase(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Seed database timeout after 10s")), 10000))
+    ]);
+    console.log("[DEBUG] 15. Seed database completed");
+  } catch (err) {
+    console.warn('[DEBUG] Seed database timeout/error, continuing anyway:', err);
+  }
+  
+  console.log("[DEBUG] 16. Returning httpServer");
   return httpServer;
 }
 
 async function seedDatabase() {
-  const existing = await storage.getPrescriptions();
+  try {
+    console.log("[DEBUG-SEED] 1. Getting existing prescriptions...");
+    const existing = await storage.getPrescriptions();
+    console.log("[DEBUG-SEED] 1. Done, count:", existing.length);
   if (existing.length === 0) {
     await storage.createPrescription({
       title: "Dipirona",
@@ -4758,5 +4864,9 @@ async function seedDatabase() {
     await storage.setAdminSetting("payment_instructions", "Após o pagamento, envie o comprovante via WhatsApp para liberação imediata.");
     await storage.setAdminSetting("subscription_price", "29,90");
     await storage.setAdminSetting("ai_prompt", "Você é um assistente médico especializado. Responda de forma clara e objetiva, sempre recomendando buscar um profissional de saúde para diagnósticos e tratamentos.");
+  }
+  console.log("[DEBUG-SEED] All seeding completed successfully");
+  } catch (err) {
+    console.warn('[DEBUG-SEED] Error during seeding:', err);
   }
 }

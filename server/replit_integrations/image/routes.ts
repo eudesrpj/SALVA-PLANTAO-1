@@ -21,7 +21,15 @@ export function registerImageRoutes(app: Express): void {
         size: size as "1024x1024" | "512x512" | "256x256",
       });
 
+      if (!response.data || response.data.length === 0) {
+        throw new Error("OpenAI não retornou nenhuma imagem");
+      }
+
       const imageData = response.data[0];
+      if (!imageData.url) {
+        throw new Error("URL da imagem não disponível");
+      }
+
       res.json({
         url: imageData.url,
         b64_json: imageData.b64_json,

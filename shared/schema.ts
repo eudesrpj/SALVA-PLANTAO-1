@@ -1419,6 +1419,12 @@ export const userPreferences = pgTable("user_preferences", {
   // UI Preferences
   theme: text("theme").default("light"), // light, dark, auto
   language: text("language").default("pt-BR"),
+  colorScheme: text("color_scheme").default("blue"), // blue, green, purple, orange, red, indigo, pink, cyan
+  fontSize: text("font_size").default("medium"), // small, medium, large, xlarge
+  compactMode: boolean("compact_mode").default(false),
+  notificationsEnabled: boolean("notifications_enabled").default(true),
+  emailNotifications: boolean("email_notifications").default(true),
+  soundEnabled: boolean("sound_enabled").default(true),
   // Last shown message date for daily message logic
   lastMessageOfDayDate: text("last_message_of_day_date"), // YYYY-MM-DD
   updatedAt: timestamp("updated_at").defaultNow(),

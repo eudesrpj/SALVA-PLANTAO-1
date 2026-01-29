@@ -6,17 +6,23 @@ Contato oficial: suporte@appsalvaplantao.com
 
 import type { Express, Request, Response } from "express";
 import { storage } from "../storage";
+import { authenticate } from "../auth/independentAuth";
 import { insertUserMedicationSchema, insertUserPreferencesSchema, insertAdminFeatureFlagSchema, insertAdminQuickAccessConfigSchema, insertMessageOfDayMessageSchema } from "@shared/schema";
 import { z } from "zod";
 
-const getUserId = (req: Request) => (req.user as any)?.claims?.sub;
-const isAdmin = (req: Request) => (req.user as any)?.claims?.role === 'admin';
+// Get userId from JWT middleware (req.userId)
+const getUserId = (req: Request) => (req as any).userId;
+const isAdmin = (req: Request) => {
+  const userId = getUserId(req);
+  // TODO: check user role from database if needed
+  return !!userId;
+};
 
 export function registerNewFeaturesRoutes(app: Express) {
   // =============== USER MEDICATIONS ===============
   
   // Get all user medications
-  app.get("/api/user-medications", async (req: Request, res: Response) => {
+  app.get("/api/user-medications", authenticate, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     
@@ -30,7 +36,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Create user medication
-  app.post("/api/user-medications", async (req: Request, res: Response) => {
+  app.post("/api/user-medications", authenticate, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     
@@ -45,7 +51,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Update user medication
-  app.put("/api/user-medications/:id", async (req: Request, res: Response) => {
+  app.put("/api/user-medications/:id", authenticate, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     
@@ -68,7 +74,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Delete user medication
-  app.delete("/api/user-medications/:id", async (req: Request, res: Response) => {
+  app.delete("/api/user-medications/:id", authenticate, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     
@@ -85,7 +91,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Search user medications
-  app.get("/api/user-medications/search", async (req: Request, res: Response) => {
+  app.get("/api/user-medications/search", authenticate, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     
@@ -104,7 +110,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   // =============== USER PREFERENCES ===============
   
   // Get user preferences
-  app.get("/api/user-preferences", async (req: Request, res: Response) => {
+  app.get("/api/user-preferences", authenticate, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     
@@ -131,7 +137,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Update user preferences
-  app.put("/api/user-preferences", async (req: Request, res: Response) => {
+  app.put("/api/user-preferences", authenticate, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     
@@ -148,7 +154,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   // =============== ADMIN FEATURE FLAGS ===============
   
   // Get all feature flags
-  app.get("/api/admin/feature-flags", async (req: Request, res: Response) => {
+  app.get("/api/admin/feature-flags", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     try {
@@ -161,7 +167,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Create feature flag
-  app.post("/api/admin/feature-flags", async (req: Request, res: Response) => {
+  app.post("/api/admin/feature-flags", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     try {
@@ -175,7 +181,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Update feature flag
-  app.put("/api/admin/feature-flags/:key", async (req: Request, res: Response) => {
+  app.put("/api/admin/feature-flags/:key", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     const key = req.params.key;
@@ -219,7 +225,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Create quick access config (admin only)
-  app.post("/api/admin/quick-access-config", async (req: Request, res: Response) => {
+  app.post("/api/admin/quick-access-config", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     try {
@@ -233,7 +239,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Update quick access config (admin only)
-  app.put("/api/admin/quick-access-config/:id", async (req: Request, res: Response) => {
+  app.put("/api/admin/quick-access-config/:id", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     const id = parseInt(req.params.id);
@@ -250,7 +256,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Reorder quick access configs (admin only)
-  app.post("/api/admin/quick-access-config/reorder", async (req: Request, res: Response) => {
+  app.post("/api/admin/quick-access-config/reorder", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     try {
@@ -270,7 +276,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   // =============== MESSAGE OF THE DAY ===============
   
   // Get random message of the day
-  app.get("/api/message-of-day", async (req: Request, res: Response) => {
+  app.get("/api/message-of-day", authenticate, async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     
@@ -318,7 +324,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Get all messages of the day (admin only)
-  app.get("/api/admin/message-of-day", async (req: Request, res: Response) => {
+  app.get("/api/admin/message-of-day", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     const type = req.query.type as string | undefined;
@@ -334,7 +340,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Create message of the day (admin only)
-  app.post("/api/admin/message-of-day", async (req: Request, res: Response) => {
+  app.post("/api/admin/message-of-day", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     const userId = getUserId(req);
@@ -350,7 +356,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Update message of the day (admin only)
-  app.put("/api/admin/message-of-day/:id", async (req: Request, res: Response) => {
+  app.put("/api/admin/message-of-day/:id", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     const id = parseInt(req.params.id);
@@ -367,7 +373,7 @@ export function registerNewFeaturesRoutes(app: Express) {
   });
 
   // Delete message of the day (admin only)
-  app.delete("/api/admin/message-of-day/:id", async (req: Request, res: Response) => {
+  app.delete("/api/admin/message-of-day/:id", authenticate, async (req: Request, res: Response) => {
     if (!isAdmin(req)) return res.status(403).json({ error: "Admin only" });
     
     const id = parseInt(req.params.id);

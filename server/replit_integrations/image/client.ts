@@ -25,6 +25,16 @@ export async function generateImageBuffer(
     prompt,
     size,
   });
+
+  if (!response.data || response.data.length === 0) {
+    throw new Error("OpenAI não retornou nenhuma imagem");
+  }
+
+  const imageUrl = response.data[0].url;
+  if (!imageUrl) {
+    throw new Error("URL da imagem não disponível");
+  }
+
   const base64 = response.data[0]?.b64_json ?? "";
   return Buffer.from(base64, "base64");
 }
@@ -55,7 +65,7 @@ export async function editImages(
     prompt,
   });
 
-  const imageBase64 = response.data[0]?.b64_json ?? "";
+  const imageBase64 = response.data?.[0]?.b64_json ?? "";
   const imageBytes = Buffer.from(imageBase64, "base64");
 
   if (outputPath) {

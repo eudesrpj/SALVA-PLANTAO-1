@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { requestEmailAuth, verifyEmailCode, verifyMagicLink, deleteUserAccount } from "./authService";
 import { authStorage } from "../replit_integrations/auth/storage";
+import { setAuthCookies } from "./independentAuth";
+import bcrypt from "bcryptjs";
 
 export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/email/request", async (req, res) => {
@@ -131,6 +133,48 @@ export function registerAuthRoutes(app: Express) {
     });
   });
 
+  // Login por senha (dev/fallback)
+  app.post("/api/auth/login-password", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email e senha são obrigatórios" });
+      }
+      
+      const user = await authStorage.getUserByEmail(email);
+      
+      if (!user || !user.passwordHash) {
+        return res.status(401).json({ message: "Credenciais inválidas" });
+      }
+      
+      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+      
+      if (!isValidPassword) {
+        return res.status(401).json({ message: "Credenciais inválidas" });
+      }
+      
+      // Set auth cookies (mesma forma que o sistema JWT)
+      setAuthCookies(res, user.id);
+      
+      res.json({ 
+        ok: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          status: user.status,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          profileImageUrl: user.profileImageUrl
+        }
+      });
+    } catch (error) {
+      console.error("Password login error:", error);
+      res.status(500).json({ message: "Erro interno" });
+    }
+  });
+
   app.delete("/api/account", async (req, res) => {
     const userId = (req.session as any)?.userId;
     
@@ -151,15 +195,5 @@ export function registerAuthRoutes(app: Express) {
       res.clearCookie("connect.sid");
       res.json({ success: true });
     });
-  });
-
-  app.get("/api/auth/user", (req, res) => {
-    const user = (req.session as any)?.user;
-    
-    if (!user) {
-      return res.status(401).json({ message: "Não autenticado" });
-    }
-    
-    res.json(user);
   });
 }
