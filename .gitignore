@@ -1,17 +1,54 @@
+# =========================
 # deps / build
+# =========================
 node_modules/
 dist/
 
+# =========================
 # env (NUNCA subir)
+# =========================
 .env
 .env.*
+!.env.example
 
+# =========================
 # OS / misc
+# =========================
 .DS_Store
+Thumbs.db
 *.tar.gz
 
+# =========================
 # app generated
+# =========================
 server/public
 
+# =========================
+# logs
+# =========================
+*.log
+error.log
+output.log
+server.log
+server-test.log
+
+# =========================
+# scratch / testes locais
+# =========================
+listen-test.js
+test-*.js
+test-*.cjs
+test-*.ps1
+test-api.js
+test-db-connection.js
+
+# =========================
+# VS Code / Copilot
+# =========================
+.vscode/
+*.vsix
+
+# =========================
 # configs temporários
+# =========================
 vite.config.ts.*
