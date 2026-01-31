@@ -1,0 +1,14 @@
+# Comando de Deploy para Cloud Run (copie e cole no terminal)
+# Execute no mesmo diretório que o Dockerfile
+
+gcloud run deploy salva-plantao-prod \
+  --source=. \
+  --platform=managed \
+  --region=southamerica-east1 \
+  --allow-unauthenticated \
+  --memory=512Mi \
+  --cpu=1 \
+  --timeout=3600 \
+  --set-env-vars="NODE_ENV=production" \
+  --set-secrets="DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest" \
+  --project=salva-plantao-prod1
