@@ -22,6 +22,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=8080
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 
 COPY package*.json ./
 RUN npm ci --omit=dev
