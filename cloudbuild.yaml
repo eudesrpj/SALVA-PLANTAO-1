@@ -31,7 +31,29 @@ steps:
         "push",
         "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:latest"
       ]
-
+- name: "gcr.io/cloud-builders/run"
+    args:
+      [
+        "deploy",
+        "${_SERVICE}-prod",
+        "--image",
+        "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA",
+        "--region",
+        "${_REGION}",
+        "--platform",
+        "managed",
+        "--allow-unauthenticated",
+        "--memory",
+        "512Mi",
+        "--cpu",
+        "1",
+        "--timeout",
+        "3600",
+        "--set-env-vars",
+        "NODE_ENV=production",
+        "--set-secrets",
+        "DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest"
+      ]
 images:
   - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:$SHORT_SHA"
   - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE}:latest"
