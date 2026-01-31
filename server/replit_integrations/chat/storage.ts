@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { conversations, messages } from "@shared/schema";
-import { eq, desc, and, gte } from "drizzle-orm";
+import { eq, desc, and, lt } from "drizzle-orm";
 
 export interface IChatStorage {
   getConversation(id: number): Promise<typeof conversations.$inferSelect | undefined>;
@@ -115,9 +115,10 @@ export const chatStorage: IChatStorage = {
 
   async cleanExpiredMessages(): Promise<number> {
     try {
+      const now = new Date();
       const result = await db
         .delete(messages)
-        .where(gte(messages.expiresAt, new Date()))
+        .where(lt(messages.expiresAt, now))
         .returning();
 
       console.log("[CHAT STORAGE] Cleaned", result.length, "expired messages");

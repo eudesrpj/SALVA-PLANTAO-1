@@ -155,49 +155,68 @@ export function registerChatRoutes(app: Express): void {
 
   // Send message and get AI response (streaming)
   app.post("/api/conversations/:id/messages", authenticate, async (req: Request, res: Response) => {
+    console.log("[CHAT] POST /api/conversations/:id/messages - Starting handler");
+    
     try {
       const userId = (req as any).userId;
+      console.log("[CHAT] User ID:", userId);
 
       // Check rate limit
       if (!checkRateLimit(userId)) {
+        console.log("[CHAT] Rate limit exceeded for user:", userId);
         return res.status(429).json({ error: "Muitas mensagens enviadas. Tente novamente em alguns segundos." });
       }
 
       // Validate input
       const validation = createMessageSchema.safeParse(req.body);
       if (!validation.success) {
+        console.log("[CHAT] Validation failed:", validation.error.errors);
         return res.status(400).json({ error: validation.error.errors[0]?.message || "Dados inválidos" });
       }
 
       const conversationId = parseInt(req.params.id);
       if (isNaN(conversationId)) {
+        console.log("[CHAT] Invalid conversation ID:", req.params.id);
         return res.status(400).json({ error: "ID de conversa inválido" });
       }
 
+      console.log("[CHAT] Conversation ID:", conversationId);
+
       // Sanitize content
       const sanitizedContent = sanitizeContent(validation.data.content);
+      console.log("[CHAT] Sanitized content length:", sanitizedContent.length);
 
       // Check if OpenAI is available
       if (!openai) {
         // Fallback: Return a helpful message instead of error
         console.warn("[CHAT] OpenAI not configured, using fallback response");
-        await chatStorage.createMessage(conversationId, "user", sanitizedContent);
+        
+        try {
+          await chatStorage.createMessage(conversationId, "user", sanitizedContent);
+          console.log("[CHAT] User message saved");
 
-        const fallbackResponse = 
-          "Desculpe, o assistente de IA está temporariamente indisponível. " +
-          "Estamos trabalhando para restaurar este serviço. " +
-          "Por enquanto, você pode consultar a calculadora de medicamentos ou o painel de emergência.";
+          const fallbackResponse = 
+            "Desculpe, o assistente de IA está temporariamente indisponível. " +
+            "Estamos trabalhando para restaurar este serviço. " +
+            "Por enquanto, você pode consultar a calculadora de medicamentos ou o painel de emergência.";
 
-        await chatStorage.createMessage(conversationId, "assistant", fallbackResponse);
+          await chatStorage.createMessage(conversationId, "assistant", fallbackResponse);
+          console.log("[CHAT] Fallback response saved");
 
-        return res.status(200).json({
-          status: "fallback",
-          message: fallbackResponse,
-        });
+          return res.status(200).json({
+            status: "fallback",
+            message: fallbackResponse,
+          });
+        } catch (fallbackError) {
+          console.error("[CHAT] Error in fallback handler:", fallbackError);
+          return res.status(500).json({ error: "Falha ao processar mensagem" });
+        }
       }
 
       // Save user message
+      console.log("[CHAT] Saving user message...");
       await chatStorage.createMessage(conversationId, "user", sanitizedContent);
+      console.log("[CHAT] User message saved successfully");
 
       // Get conversation history for context (limit to last 20 messages)
       const messages = await chatStorage.getMessagesByConversation(conversationId);
@@ -207,45 +226,60 @@ export function registerChatRoutes(app: Express): void {
         content: m.content,
       }));
 
+      console.log("[CHAT] Conversation history loaded:", chatMessages.length, "messages");
+
       // Set up SSE
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
       res.setHeader("Access-Control-Allow-Origin", "*");
 
+      console.log("[CHAT] SSE headers set, preparing OpenAI request...");
+
       try {
         // Stream response from OpenAI
+        console.log("[CHAT] Calling OpenAI API with model: gpt-4o-mini");
         const stream = await openai.chat.completions.create({
-          model: "gpt-4o-mini", // Updated to available model
+          model: "gpt-4o-mini",
           messages: chatMessages,
           stream: true,
           max_completion_tokens: 2048,
           temperature: 0.7,
         });
 
+        console.log("[CHAT] OpenAI stream created, starting to read...");
         let fullResponse = "";
-        let hasError = false;
+        let chunkCount = 0;
 
         for await (const chunk of stream) {
           const content = chunk.choices[0]?.delta?.content || "";
           if (content) {
             fullResponse += content;
+            chunkCount++;
             res.write(`data: ${JSON.stringify({ content, status: "streaming" })}\n\n`);
           }
         }
 
+        console.log("[CHAT] Stream completed:", chunkCount, "chunks,", fullResponse.length, "chars");
+
         if (fullResponse.trim()) {
           // Save assistant message
           await chatStorage.createMessage(conversationId, "assistant", fullResponse);
+          console.log("[CHAT] Assistant message saved");
           res.write(`data: ${JSON.stringify({ done: true, status: "success" })}\n\n`);
         } else {
-          hasError = true;
+          console.warn("[CHAT] Empty response from OpenAI");
           res.write(`data: ${JSON.stringify({ error: "Resposta vazia do assistente", status: "error" })}\n\n`);
         }
 
         res.end();
       } catch (aiError: any) {
-        console.error("[CHAT] OpenAI API error:", aiError.message);
+        console.error("[CHAT] OpenAI API error:", {
+          message: aiError.message,
+          status: aiError.status,
+          code: aiError.code,
+          error: aiError.error,
+        });
 
         if (res.headersSent) {
           const errorMessage = aiError.status === 429 
@@ -264,7 +298,11 @@ export function registerChatRoutes(app: Express): void {
         }
       }
     } catch (error: any) {
-      console.error("[CHAT] Error in message handler:", error);
+      console.error("[CHAT] Error in message handler:", {
+        message: error.message,
+        stack: error.stack,
+        error: error,
+      });
 
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ error: "Erro interno do servidor", status: "error" })}\n\n`);
