@@ -12,9 +12,13 @@ if (!process.env.DATABASE_URL) {
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false, // Cloud SQL sem certificado de cliente
-  },
+  // SSL configuration for Cloud SQL
+  ssl: process.env.NODE_ENV === 'production' 
+    ? {
+        rejectUnauthorized: false,
+        ca: undefined,
+      }
+    : false,
   connectionTimeoutMillis: 30000,
   idleTimeoutMillis: 30000,
   max: 20,
