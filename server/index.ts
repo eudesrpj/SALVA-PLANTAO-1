@@ -18,8 +18,10 @@ import { setupWebSocket } from "./websocket";
 const app = express();
 const httpServer = createServer(app);
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Em CommonJS (build), import.meta.url é undefined, então usamos process.cwd()
+const __dirname = import.meta?.url 
+  ? path.dirname(fileURLToPath(import.meta.url))
+  : __dirname || process.cwd();
 
 const appName = process.env.APP_NAME || "Salva Plantão";
 const appVersion = (() => {
