@@ -100,28 +100,31 @@ export function setAuthCookies(res: Response, userId: string): void {
   
   const isProduction = process.env.NODE_ENV === "production";
   
-  // Em produção: secure=true (HTTPS obrigatório), sameSite=lax é mais seguro que none
+  // Em produção: secure=true (HTTPS obrigatório), sameSite=none permite cross-domain
   // Em dev: secure=false (localhost), sameSite=lax
   const secure = isProduction;
-  const sameSite = "lax"; // lax funciona bem com credentials: include
+  const sameSite = isProduction ? "none" : "lax"; // none é necessário para rewrites do Firebase
   
-  res.cookie(AUTH_COOKIE_NAME, token, {
+  const cookieOptions = {
     httpOnly: true,
     secure,
-    sameSite,
+    sameSite: sameSite as "lax" | "none" | "strict",
     path: "/",
+    domain: isProduction ? ".run.app" : undefined, // Permite cookies no Cloud Run
+  };
+  
+  res.cookie(AUTH_COOKIE_NAME, token, {
+    ...cookieOptions,
     maxAge: 15 * 60 * 1000, // 15 minutes
   });
   
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
-    httpOnly: true,
-    secure,
-    sameSite,
-    path: "/",
+    ...cookieOptions,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
   
-  console.log(`🍪 Cookies setados para ${userId} (secure=${secure}, sameSite=${sameSite})`);
+  // Também enviar token no body para o frontend guardar no localStorage como backup
+  console.log(`🍪 Cookies setados para ${userId} (secure=${secure}, sameSite=${sameSite}, domain=${cookieOptions.domain || 'default'})`);
 }
 
 /**
@@ -136,23 +139,36 @@ export function clearAuthCookies(res: Response): void {
  * Extract user from request (from cookies or header)
  */
 export function extractUser(req: Request): { userId: string } | null {
+  console.log(`🔍 Extracting user - Cookies: ${JSON.stringify(Object.keys(req.cookies || {}))}`);
+  console.log(`🔍 Auth header: ${req.headers.authorization ? 'present' : 'missing'}`);
+  
   // Try cookie first
   const token = req.cookies?.[AUTH_COOKIE_NAME];
   if (token) {
+    console.log(`✓ Token found in cookie`);
     const payload = verifyToken(token, false);
     if (payload) {
+      console.log(`✓ Token verified, userId: ${payload.userId}`);
       return payload;
     }
+    console.log(`✗ Token verification failed`);
+  } else {
+    console.log(`✗ No token in cookie`);
   }
   
   // Try authorization header (Bearer token)
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
+    console.log(`✓ Token found in header`);
     const payload = verifyToken(token, false);
     if (payload) {
+      console.log(`✓ Token verified, userId: ${payload.userId}`);
       return payload;
     }
+    console.log(`✗ Token verification failed`);
+  } else {
+    console.log(`✗ No token in header`);
   }
   
   return null;
@@ -312,10 +328,14 @@ export function registerIndependentAuthRoutes(app: Express): void {
       // Set cookies
       setAuthCookies(res, user.id);
       
+      // Também retornar token para o frontend usar em headers se cookies não funcionarem
+      const token = createToken(user.id, false);
+      
       res.json({
         success: true,
         userId: user.id,
         email: user.email,
+        token, // Token JWT para usar em headers
       });
     } catch (error) {
       console.error("Login error:", error);

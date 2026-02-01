@@ -105,7 +105,12 @@ export default function Login() {
 
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/login-password", { email, password });
+      const response = await apiRequest("POST", "/api/auth/login-password", { email, password });
+      
+      // Guardar token no localStorage se retornado (backup para quando cookies não funcionam)
+      if (response.token) {
+        localStorage.setItem("auth_token", response.token);
+      }
       
       toast({
         title: "✓ Login realizado!",

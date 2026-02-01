@@ -170,8 +170,13 @@ export function registerAuthRoutes(app: Express) {
       // Set auth cookies (mesma forma que o sistema JWT)
       setAuthCookies(res, user.id);
       
+      // Também retornar token para o frontend usar em headers
+      const { createToken } = await import("./independentAuth");
+      const token = createToken(user.id, false);
+      
       res.json({ 
         ok: true,
+        token, // Token JWT para usar em headers
         user: {
           id: user.id,
           email: user.email,
