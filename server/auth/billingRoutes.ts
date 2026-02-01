@@ -1,8 +1,16 @@
 import type { Express } from "express";
 import { storage } from "../storage";
-import { authStorage } from "../replit_integrations/auth/storage";
+import { authenticate } from "./independentAuth";
 
 function getPublishedDomain(req: any): string {
+  const appUrl = process.env.APP_URL;
+  if (appUrl) {
+    if (appUrl.startsWith("http://") || appUrl.startsWith("https://")) {
+      return appUrl;
+    }
+    return `https://${appUrl}`;
+  }
+
   // Try Replit domain first
   const replitDomains = process.env.REPLIT_DOMAINS;
   if (replitDomains) {
@@ -25,6 +33,9 @@ async function createAsaasPaymentLink(params: {
   successUrl: string;
   cancelUrl: string;
 }): Promise<{ url: string; id: string } | null> {
+  const apiBase = process.env.ASAAS_SANDBOX === "true"
+    ? "https://sandbox.asaas.com/api/v3"
+    : "https://www.asaas.com/api/v3";
   const apiKey = process.env.ASAAS_API_KEY;
   if (!apiKey) {
     console.error("ASAAS_API_KEY not configured");
@@ -32,7 +43,7 @@ async function createAsaasPaymentLink(params: {
   }
 
   try {
-    const response = await fetch("https://api.asaas.com/v3/paymentLinks", {
+    const response = await fetch(`${apiBase}/paymentLinks`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -73,6 +84,7 @@ async function createAsaasPaymentLink(params: {
 export function registerBillingRoutes(app: Express) {
   app.get("/api/billing/plans", async (req, res) => {
     try {
+      await storage.seedBillingPlans();
       const plans = await storage.getBillingPlans();
       res.json(plans);
     } catch (error) {
@@ -81,20 +93,20 @@ export function registerBillingRoutes(app: Express) {
     }
   });
 
-  app.post("/api/billing/checkout", async (req, res) => {
+  app.post("/api/billing/checkout", authenticate, async (req, res) => {
     try {
-      const userId = (req.session as any)?.userId;
-      if (!userId) {
-        return res.status(401).json({ message: "Não autenticado" });
-      }
+      const userId = req.userId;
+      if (!userId) return res.status(401).json({ message: "Não autenticado" });
 
-      const { planCode, couponCode, paymentMethod } = req.body;
+      const { planCode, planSlug, couponCode, paymentMethod } = req.body;
 
-      if (!planCode) {
+      const resolvedPlanCode = planCode || mapPlanSlugToCode(planSlug);
+      if (!resolvedPlanCode) {
         return res.status(400).json({ message: "Plano não informado" });
       }
 
-      const plan = await storage.getBillingPlan(planCode);
+      await storage.seedBillingPlans();
+      const plan = await storage.getBillingPlan(resolvedPlanCode);
       if (!plan) {
         return res.status(400).json({ message: "Plano não encontrado" });
       }
@@ -127,7 +139,7 @@ export function registerBillingRoutes(app: Express) {
 
       const order = await storage.createBillingOrder({
         userId,
-        planCode,
+        planCode: resolvedPlanCode,
         originalPriceCents: plan.priceCents,
         discountCents,
         finalPriceCents,
@@ -137,7 +149,10 @@ export function registerBillingRoutes(app: Express) {
       });
 
       const baseUrl = getPublishedDomain(req);
-      const user = await authStorage.getUser(userId);
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "Usuário não encontrado" });
+      }
 
       const paymentLink = await createAsaasPaymentLink({
         name: `Salva Plantão - ${plan.name}`,
@@ -166,14 +181,12 @@ export function registerBillingRoutes(app: Express) {
     }
   });
 
-  app.get("/api/billing/status", async (req, res) => {
+  app.get("/api/billing/status", authenticate, async (req, res) => {
     try {
-      const userId = (req.session as any)?.userId;
-      if (!userId) {
-        return res.status(401).json({ message: "Não autenticado" });
-      }
+      const userId = req.userId;
+      if (!userId) return res.status(401).json({ message: "Não autenticado" });
 
-      const user = await authStorage.getUser(userId);
+      const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "Usuário não encontrado" });
       }
@@ -213,12 +226,10 @@ export function registerBillingRoutes(app: Express) {
     }
   });
 
-  app.get("/api/billing/orders", async (req, res) => {
+  app.get("/api/billing/orders", authenticate, async (req, res) => {
     try {
-      const userId = (req.session as any)?.userId;
-      if (!userId) {
-        return res.status(401).json({ message: "Não autenticado" });
-      }
+      const userId = req.userId;
+      if (!userId) return res.status(401).json({ message: "Não autenticado" });
 
       const orders = await storage.getUserBillingOrders(userId);
       res.json(orders);
@@ -230,60 +241,115 @@ export function registerBillingRoutes(app: Express) {
 
   app.post("/api/webhooks/asaas", async (req, res) => {
     try {
+      const webhookToken = process.env.ASAAS_WEBHOOK_TOKEN;
+      const headerToken = req.headers["x-asaas-webhook-token"] as string | undefined;
+      if (webhookToken && webhookToken !== headerToken) {
+        return res.status(401).json({ message: "Webhook token inválido" });
+      }
+
       const { event, payment } = req.body;
 
-      if (event !== "PAYMENT_CONFIRMED" && event !== "PAYMENT_RECEIVED") {
+      const eventKey = `${event || "unknown"}:${payment?.id || "no-id"}:${payment?.externalReference || "no-ref"}`;
+      const existingEvent = await storage.getWebhookEventByKey(eventKey);
+      if (existingEvent?.processingStatus === "processed") {
+        return res.json({ received: true, duplicate: true });
+      }
+
+      const createdEvent = existingEvent || await storage.createWebhookEvent({
+        eventType: event || "unknown",
+        eventKey,
+        rawPayload: req.body
+      });
+
+      if (event !== "PAYMENT_CONFIRMED" && event !== "PAYMENT_RECEIVED" && event !== "PAYMENT_UPDATED") {
+        await storage.markWebhookEventProcessed(createdEvent.id, "processed");
         return res.json({ received: true });
       }
 
       const externalReference = payment?.externalReference;
-      if (!externalReference) {
-        console.warn("Webhook without externalReference");
-        return res.json({ received: true });
-      }
+      if (externalReference?.includes("|")) {
+        const [userId, orderIdStr] = externalReference.split("|");
+        const orderId = parseInt(orderIdStr);
 
-      const [userId, orderIdStr] = externalReference.split("|");
-      const orderId = parseInt(orderIdStr);
+        if (userId && !isNaN(orderId)) {
+          const order = await storage.getBillingOrder(orderId);
+          if (order && order.status !== "paid") {
+            await storage.updateBillingOrder(orderId, {
+              status: "paid",
+              paidAt: new Date()
+            });
 
-      if (!userId || isNaN(orderId)) {
-        console.warn("Invalid externalReference format:", externalReference);
-        return res.json({ received: true });
-      }
+            const plan = await storage.getBillingPlan(order.planCode);
+            if (plan) {
+              await storage.activateUserEntitlement(userId, order.planCode, plan.durationDays, orderId);
+              await storage.updateUserStatus(userId, "active");
+            }
 
-      const order = await storage.getBillingOrder(orderId);
-      if (!order) {
-        console.warn("Order not found:", orderId);
-        return res.json({ received: true });
-      }
-
-      if (order.status === "paid") {
-        return res.json({ received: true, message: "Already processed" });
-      }
-
-      await storage.updateBillingOrder(orderId, {
-        status: "paid",
-        paidAt: new Date()
-      });
-
-      const plan = await storage.getBillingPlan(order.planCode);
-      if (plan) {
-        await storage.activateUserEntitlement(userId, order.planCode, plan.durationDays, orderId);
-        await authStorage.updateUserStatus(userId, "active");
-      }
-
-      if (order.couponCode) {
-        const coupon = await storage.getPromoCouponByCode(order.couponCode);
-        if (coupon) {
-          await storage.updatePromoCoupon(coupon.id, {
-            currentUses: (coupon.currentUses || 0) + 1
-          } as any);
+            if (order.couponCode) {
+              const coupon = await storage.getPromoCouponByCode(order.couponCode);
+              if (coupon) {
+                await storage.updatePromoCoupon(coupon.id, {
+                  currentUses: (coupon.currentUses || 0) + 1
+                } as any);
+              }
+            }
+          }
         }
       }
 
-      console.log(`Payment confirmed for user ${userId}, order ${orderId}`);
-      res.json({ received: true, activated: true });
+      if (payment?.id) {
+        const existingPayment = await storage.getPaymentByProviderId(payment.id);
+        if (existingPayment) {
+          let newStatus = existingPayment.status;
+          switch (event) {
+            case "PAYMENT_CONFIRMED":
+            case "PAYMENT_RECEIVED":
+              newStatus = "paid";
+              break;
+            case "PAYMENT_OVERDUE":
+              newStatus = "overdue";
+              break;
+            case "PAYMENT_DELETED":
+            case "PAYMENT_REFUNDED":
+              newStatus = "refunded";
+              break;
+            case "PAYMENT_UPDATED":
+              newStatus = payment.status?.toLowerCase() || existingPayment.status;
+              break;
+          }
+
+          await storage.updatePayment(existingPayment.id, {
+            status: newStatus,
+            paidAt: newStatus === "paid" ? new Date() : null
+          });
+
+          if (newStatus === "paid" && existingPayment.subscriptionId) {
+            const subscription = await storage.getSubscription(existingPayment.subscriptionId);
+            if (subscription) {
+              await storage.updateSubscription(subscription.id, {
+                status: "active",
+                lastPaymentStatus: "paid"
+              });
+              await storage.updateUserStatus(subscription.userId, "active");
+            }
+          }
+        }
+      }
+
+      await storage.markWebhookEventProcessed(createdEvent.id, "processed");
+      res.json({ received: true });
     } catch (error) {
       console.error("Webhook processing error:", error);
+      try {
+        const { event, payment } = req.body || {};
+        const eventKey = `${event || "unknown"}:${payment?.id || "no-id"}:${payment?.externalReference || "no-ref"}`;
+        const existingEvent = await storage.getWebhookEventByKey(eventKey);
+        if (existingEvent) {
+          await storage.markWebhookEventProcessed(existingEvent.id, "failed");
+        }
+      } catch (innerError) {
+        console.error("Webhook event update error:", innerError);
+      }
       res.status(500).json({ message: "Webhook processing error" });
     }
   });
@@ -292,11 +358,12 @@ export function registerBillingRoutes(app: Express) {
     try {
       const { couponCode, planCode } = req.body;
 
-      if (!couponCode) {
+      const normalizedCoupon = typeof couponCode === "string" ? couponCode.trim().toUpperCase() : "";
+      if (!normalizedCoupon) {
         return res.status(400).json({ valid: false, message: "Código não informado" });
       }
 
-      const coupon = await storage.getPromoCouponByCode(couponCode);
+      const coupon = await storage.getPromoCouponByCode(normalizedCoupon);
       if (!coupon || !coupon.isActive) {
         return res.json({ valid: false, message: "Cupom inválido" });
       }
@@ -336,4 +403,13 @@ export function registerBillingRoutes(app: Express) {
       res.status(500).json({ valid: false, message: "Erro ao validar cupom" });
     }
   });
+}
+
+function mapPlanSlugToCode(planSlug?: string): string | null {
+  if (!planSlug) return null;
+  const normalized = planSlug.toLowerCase();
+  if (normalized === "mensal" || normalized === "monthly") return "monthly";
+  if (normalized === "semestral" || normalized === "semiannual" || normalized === "semiannually") return "semiannual";
+  if (normalized === "anual" || normalized === "annual" || normalized === "yearly") return "annual";
+  return null;
 }

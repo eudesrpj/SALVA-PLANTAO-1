@@ -96,6 +96,7 @@ import {
   emailAuthTokens, type EmailAuthToken, type InsertEmailAuthToken,
   billingPlans, type BillingPlan, type InsertBillingPlan,
   billingOrders, type BillingOrder, type InsertBillingOrder,
+  webhookEvents, type WebhookEvent, type InsertWebhookEvent,
   userEntitlements, type UserEntitlement, type InsertUserEntitlement
 } from "@shared/models/auth";
 import { db } from "./db";
@@ -393,6 +394,11 @@ export interface IStorage {
   getPaymentByProviderId(providerPaymentId: string): Promise<Payment | undefined>;
   createPayment(item: InsertPayment): Promise<Payment>;
   updatePayment(id: number, item: Partial<InsertPayment>): Promise<Payment>;
+
+  // Webhook Events
+  getWebhookEventByKey(eventKey: string): Promise<WebhookEvent | undefined>;
+  createWebhookEvent(data: InsertWebhookEvent): Promise<WebhookEvent>;
+  markWebhookEventProcessed(id: number, status?: "processed" | "failed"): Promise<WebhookEvent | undefined>;
 
   // Medication Dilutions
   getMedicationDilutions(medicationId?: number): Promise<MedicationDilution[]>;
@@ -3421,6 +3427,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(billingOrders.id, id))
       .returning();
     return order;
+  }
+
+  // --- Webhook Events ---
+  async getWebhookEventByKey(eventKey: string): Promise<WebhookEvent | undefined> {
+    const [event] = await db.select().from(webhookEvents)
+      .where(eq(webhookEvents.eventKey, eventKey))
+      .limit(1);
+    return event;
+  }
+
+  async createWebhookEvent(data: InsertWebhookEvent): Promise<WebhookEvent> {
+    const [event] = await db.insert(webhookEvents).values(data).returning();
+    return event;
+  }
+
+  async markWebhookEventProcessed(id: number, status: "processed" | "failed" = "processed"): Promise<WebhookEvent | undefined> {
+    const [event] = await db.update(webhookEvents)
+      .set({ processingStatus: status, processedAt: new Date() })
+      .where(eq(webhookEvents.id, id))
+      .returning();
+    return event;
   }
 
   // --- User Entitlements ---

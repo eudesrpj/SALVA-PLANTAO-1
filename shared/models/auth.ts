@@ -112,6 +112,23 @@ export const insertBillingOrderSchema = createInsertSchema(billingOrders).omit({
 export type BillingOrder = typeof billingOrders.$inferSelect;
 export type InsertBillingOrder = z.infer<typeof insertBillingOrderSchema>;
 
+// Webhook Events (audit + idempotency)
+export const webhookEvents = pgTable("webhook_events", {
+  id: serial("id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  eventKey: text("event_key").notNull(),
+  receivedAt: timestamp("received_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+  processingStatus: text("processing_status").default("pending"), // pending, processed, failed
+  rawPayload: jsonb("raw_payload").notNull(),
+}, (table) => [
+  unique("webhook_events_event_key_key").on(table.eventKey),
+]);
+
+export const insertWebhookEventSchema = createInsertSchema(webhookEvents).omit({ id: true, receivedAt: true, processedAt: true });
+export type WebhookEvent = typeof webhookEvents.$inferSelect;
+export type InsertWebhookEvent = z.infer<typeof insertWebhookEventSchema>;
+
 // User Entitlements (subscription access)
 export const userEntitlements = pgTable("user_entitlements", {
   userId: varchar("user_id").primaryKey().references(() => users.id),

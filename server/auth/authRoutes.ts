@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { requestEmailAuth, verifyEmailCode, verifyMagicLink, deleteUserAccount } from "./authService";
 import { authStorage } from "../replit_integrations/auth/storage";
-import { setAuthCookies } from "./independentAuth";
+import { setAuthCookies, clearAuthCookies, createToken, authenticate } from "./independentAuth";
+import { storage } from "../storage";
 import bcrypt from "bcryptjs";
 
 export function registerAuthRoutes(app: Express) {
@@ -18,9 +19,10 @@ export function registerAuthRoutes(app: Express) {
         return res.status(400).json({ message: "Email inválido" });
       }
       
+      const appUrl = process.env.APP_URL;
       const protocol = req.headers["x-forwarded-proto"] || "https";
       const host = req.headers.host || req.hostname;
-      const baseUrl = `${protocol}://${host}`;
+      const baseUrl = appUrl ? appUrl.replace(/\/$/, "") : `${protocol}://${host}`;
       
       const result = await requestEmailAuth(email, baseUrl);
       
@@ -69,9 +71,12 @@ export function registerAuthRoutes(app: Express) {
       }
 
       setAuthCookies(res, user.id);
+
+      const token = createToken(user.id, false);
       
       res.json({ 
-        success: true, 
+        success: true,
+        token,
         user: {
           id: user.id,
           email: user.email,
@@ -122,6 +127,24 @@ export function registerAuthRoutes(app: Express) {
       }
 
       setAuthCookies(res, user.id);
+      const authToken = createToken(user.id, false);
+
+      const wantsJson = String(req.headers.accept || "").includes("application/json") || req.query.json === "1";
+      if (wantsJson) {
+        return res.json({
+          success: true,
+          token: authToken,
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            role: user.role,
+            status: user.status,
+            profileImageUrl: user.profileImageUrl
+          }
+        });
+      }
       
       res.redirect("/");
     } catch (error) {
@@ -131,6 +154,8 @@ export function registerAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/logout", (req, res) => {
+    clearAuthCookies(res);
+
     if (!req.session) {
       res.clearCookie("connect.sid");
       return res.json({ success: true });
@@ -171,7 +196,6 @@ export function registerAuthRoutes(app: Express) {
       setAuthCookies(res, user.id);
       
       // Também retornar token para o frontend usar em headers
-      const { createToken } = await import("./independentAuth");
       const token = createToken(user.id, false);
       
       res.json({ 
@@ -218,5 +242,61 @@ export function registerAuthRoutes(app: Express) {
       res.clearCookie("connect.sid");
       res.json({ success: true });
     });
+  });
+
+  // GET /api/auth/identities - List all linked accounts for current user
+  app.get("/api/auth/identities", authenticate, async (req, res) => {
+    try {
+      const userId = req.userId;
+      if (!userId) {
+        return res.status(401).json({ message: "Não autenticado" });
+      }
+
+      const identities = await storage.getAuthIdentitiesByUserId(userId);
+      const formatted = identities.map(i => ({
+        id: i.id,
+        provider: i.provider,
+        email: i.email || i.providerUserId,
+        createdAt: i.createdAt
+      }));
+
+      res.json(formatted);
+    } catch (error) {
+      console.error("Get identities error:", error);
+      res.status(500).json({ message: "Erro ao listar contas" });
+    }
+  });
+
+  // DELETE /api/auth/identities/:id - Unlink an account
+  app.delete("/api/auth/identities/:id", authenticate, async (req, res) => {
+    try {
+      const userId = req.userId;
+      const identityId = parseInt(req.params.id);
+
+      if (!userId || isNaN(identityId)) {
+        return res.status(400).json({ message: "Parâmetros inválidos" });
+      }
+
+      // Get identity and verify ownership
+      const allIdentities = await storage.getAuthIdentitiesByUserId(userId);
+      const identity = allIdentities.find(i => i.id === identityId);
+
+      if (!identity) {
+        return res.status(404).json({ message: "Conta não encontrada" });
+      }
+
+      // Check if user has at least one other identity
+      if (allIdentities.length <= 1) {
+        return res.status(400).json({ message: "Você deve manter pelo menos um método de autenticação" });
+      }
+
+      // Delete identity
+      await storage.deleteAuthIdentity(identityId);
+
+      res.json({ success: true, message: "Conta desvinculada" });
+    } catch (error) {
+      console.error("Delete identity error:", error);
+      res.status(500).json({ message: "Erro ao desvincular conta" });
+    }
   });
 }

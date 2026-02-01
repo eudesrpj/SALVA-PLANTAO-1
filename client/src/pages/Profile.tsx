@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Stamp, User, Copy } from "lucide-react";
+import { LinkedAccounts } from "@/components/LinkedAccounts";
 import type { DoctorProfile } from "@shared/schema";
 
 const UF_OPTIONS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
@@ -182,6 +183,9 @@ export default function Profile() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Linked Accounts */}
+      <LinkedAccounts />
     </div>
   );
 }

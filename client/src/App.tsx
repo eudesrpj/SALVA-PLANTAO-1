@@ -56,6 +56,7 @@ import BillingSuccess from "@/pages/BillingSuccess";
 import BillingCancel from "@/pages/BillingCancel";
 import Login from "@/pages/Login";
 import MagicLink from "@/pages/MagicLink";
+import AuthCallback from "@/pages/AuthCallback";
 // New hub pages
 import AtendimentoHub from "@/pages/AtendimentoHub";
 import FerramentasHub from "@/pages/FerramentasHub";
@@ -124,6 +125,7 @@ function Router() {
       <Route path="/welcome" component={Landing} />
       <Route path="/login" component={Login} />
       <Route path="/auth/magic" component={MagicLink} />
+      <Route path="/auth/callback" component={AuthCallback} />
       
       <Route path="/admin">
         <AdminRoute component={Admin} />

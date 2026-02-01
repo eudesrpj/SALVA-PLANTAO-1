@@ -46,6 +46,7 @@ import {
 import { SubscribeButton } from "@/components/SubscriptionDialog";
 import { NotificationBell } from "@/components/NotificationBell";
 import { NotificationToggle } from "@/components/NotificationToggle";
+import { usePreviewStatus } from "@/components/PreviewGate";
 import { useState } from "react";
 
 const NAV_ITEMS = [
@@ -78,11 +79,13 @@ const NAV_ITEMS = [
 function NavContent({ onClose }: { onClose?: () => void }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const { isSubscribed } = usePreviewStatus();
 
   const handleSwitchAccount = () => {
+    logout();
     localStorage.clear();
     sessionStorage.clear();
-    window.location.href = '/api/switch-account';
+    window.location.href = "/login";
   };
 
   return (
@@ -140,7 +143,7 @@ function NavContent({ onClose }: { onClose?: () => void }) {
         <div className="pb-2 border-b border-slate-800">
           <NotificationToggle />
         </div>
-        {user?.status !== 'active' && user?.role !== 'admin' && (
+        {!isSubscribed && user?.role !== 'admin' && (
           <SubscribeButton className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg" />
         )}
         <Button

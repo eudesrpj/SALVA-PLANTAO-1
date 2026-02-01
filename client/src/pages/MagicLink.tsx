@@ -3,6 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { tokenStorage } from "@/lib/queryClient";
 
 export default function MagicLink() {
   const [, navigate] = useLocation();
@@ -27,7 +28,10 @@ export default function MagicLink() {
       try {
         const response = await fetch(`/api/auth/email/verify-magic?token=${encodeURIComponent(token)}`, {
           method: "GET",
-          credentials: "include"
+          credentials: "include",
+          headers: {
+            Accept: "application/json"
+          }
         });
         
         if (response.redirected) {
@@ -36,6 +40,10 @@ export default function MagicLink() {
         }
         
         if (response.ok) {
+          const data = await response.json().catch(() => ({}));
+          if (data?.token) {
+            tokenStorage.set(data.token);
+          }
           setStatus("success");
           setTimeout(() => {
             navigate("/");

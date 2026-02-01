@@ -65,7 +65,10 @@ export default function Login() {
 
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/email/verify-code", { email, code });
+      const response = await apiRequest("POST", "/api/auth/email/verify-code", { email, code });
+      if (response?.token) {
+        tokenStorage.set(response.token);
+      }
       
       toast({
         title: "✓ Login realizado!",
@@ -149,11 +152,7 @@ export default function Login() {
   };
 
   const handleGoogleLogin = () => {
-    // TODO: Implementar OAuth do Google quando configurado
-    toast({
-      title: "Em breve",
-      description: "Login com Google será disponibilizado em breve"
-    });
+    window.location.href = "/api/auth/google/start";
   };
 
 

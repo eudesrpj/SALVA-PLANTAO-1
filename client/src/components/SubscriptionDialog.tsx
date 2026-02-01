@@ -13,6 +13,7 @@ import { Crown, CreditCard, Loader2, Tag, Check, AlertCircle } from "lucide-reac
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { usePreviewStatus } from "@/components/PreviewGate";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ interface SubscriptionDialogProps {
 
 export function SubscriptionDialog({ open, onOpenChange }: SubscriptionDialogProps) {
   const { user } = useAuth();
+  const { isSubscribed } = usePreviewStatus();
   const { toast } = useToast();
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; discountType: string } | null>(null);
@@ -132,7 +134,7 @@ export function SubscriptionDialog({ open, onOpenChange }: SubscriptionDialogPro
     return parseInt(savings) > 0 ? `${savings}% de economia` : null;
   };
 
-  if (user?.status === 'active' || user?.role === 'admin') {
+  if (isSubscribed || user?.role === 'admin') {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md" data-testid="dialog-subscription">
@@ -279,8 +281,9 @@ export function SubscriptionDialog({ open, onOpenChange }: SubscriptionDialogPro
 export function SubscribeButton({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
+  const { isSubscribed } = usePreviewStatus();
 
-  if (user?.status === "active" || user?.role === "admin") {
+  if (isSubscribed || user?.role === "admin") {
     return null;
   }
 
@@ -306,8 +309,9 @@ interface PaywallModalProps {
 
 export function PaywallModal({ open, onOpenChange, message }: PaywallModalProps) {
   const { user } = useAuth();
+  const { isSubscribed } = usePreviewStatus();
   
-  if (user?.status === 'active' || user?.role === 'admin') {
+  if (isSubscribed || user?.role === 'admin') {
     return null;
   }
 

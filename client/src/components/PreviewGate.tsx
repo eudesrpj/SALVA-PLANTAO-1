@@ -82,10 +82,10 @@ interface PreviewGateProps {
 
 export function PreviewGate({ children, placeholder, blurContent = true }: PreviewGateProps) {
   const { user } = useAuth();
-  const { previewExpired, previewAllowed } = usePreviewStatus();
+  const { previewExpired, previewAllowed, isSubscribed } = usePreviewStatus();
   const [showDialog, setShowDialog] = useState(false);
 
-  const hasFullAccess = user?.status === "active" || user?.role === "admin";
+  const hasFullAccess = isSubscribed || user?.role === "admin";
 
   if (hasFullAccess) {
     return <>{children}</>;
@@ -134,10 +134,10 @@ export function PreviewGate({ children, placeholder, blurContent = true }: Previ
 
 export function PreviewBanner() {
   const { user } = useAuth();
-  const { previewExpired, remainingMinutes, remainingActions } = usePreviewStatus();
+  const { previewExpired, remainingMinutes, remainingActions, isSubscribed } = usePreviewStatus();
   const [showDialog, setShowDialog] = useState(false);
 
-  const hasFullAccess = user?.status === "active" || user?.role === "admin";
+  const hasFullAccess = isSubscribed || user?.role === "admin";
 
   if (hasFullAccess) {
     return null;
@@ -187,11 +187,11 @@ export function PreviewBanner() {
 
 export function PreviewExpiredOverlay() {
   const { user } = useAuth();
-  const { previewExpired, isLoading, refetch } = usePreviewStatus();
+  const { previewExpired, isLoading, refetch, isSubscribed } = usePreviewStatus();
   const [showDialog, setShowDialog] = useState(false);
   const [, setLocation] = useLocation();
 
-  const hasFullAccess = user?.status === "active" || user?.role === "admin";
+  const hasFullAccess = isSubscribed || user?.role === "admin";
 
   if (hasFullAccess || isLoading || !previewExpired) {
     return null;
@@ -239,7 +239,8 @@ export function PreviewExpiredOverlay() {
 
 export function usePreviewMode() {
   const { user } = useAuth();
-  const hasFullAccess = user?.status === "active" || user?.role === "admin";
+  const { isSubscribed } = usePreviewStatus();
+  const hasFullAccess = isSubscribed || user?.role === "admin";
   return {
     isPreview: !hasFullAccess,
     hasFullAccess,

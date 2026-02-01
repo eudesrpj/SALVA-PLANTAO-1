@@ -12,6 +12,7 @@ import { z } from "zod";
 import { insertMonthlyExpenseSchema, insertFinancialGoalSchema, userPreferences } from "@shared/schema";
 import { setupAuthMiddleware, registerIndependentAuthRoutes, authenticate } from "./auth/independentAuth";
 import { registerAuthRoutes } from "./auth/authRoutes";
+import { registerGoogleAuthRoutes } from "./auth/googleAuth";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { registerAiRoutes } from "./ai/routes";
@@ -31,37 +32,39 @@ export async function registerRoutes(
   registerIndependentAuthRoutes(app);
   console.log("[DEBUG] 3. Registering auth routes...");
   registerAuthRoutes(app);
-  console.log("[DEBUG] 4. Registering billing routes...");
+  console.log("[DEBUG] 4. Registering Google auth routes...");
+  registerGoogleAuthRoutes(app);
+  console.log("[DEBUG] 5. Registering billing routes...");
   registerBillingRoutes(app);
-  console.log("[DEBUG] 5. Registering chat routes...");
+  console.log("[DEBUG] 6. Registering chat routes...");
   registerChatRoutes(app);
-  console.log("[DEBUG] 6. Registering image routes...");
+  console.log("[DEBUG] 7. Registering image routes...");
   registerImageRoutes(app);
-  console.log("[DEBUG] 7. Registering AI routes...");
+  console.log("[DEBUG] 8. Registering AI routes...");
   registerAiRoutes(app);
-  console.log("[DEBUG] 8. Registering new features routes...");
+  console.log("[DEBUG] 9. Registering new features routes...");
   registerNewFeaturesRoutes(app);
-  console.log("[DEBUG] 9. Registering user profile routes...");
+  console.log("[DEBUG] 10. Registering user profile routes...");
   registerUserProfileRoutes(app);
   
   // Seed default plans on startup
-  console.log("[DEBUG] 10. Seeding plans...");
+  console.log("[DEBUG] 11. Seeding plans...");
   await Promise.race([
     storage.upsertPlans().catch(err => console.error('Failed to seed plans:', err)),
     new Promise((_, reject) => setTimeout(() => reject(new Error("Plans seed timeout")), 5000))
   ]).catch(err => console.warn('Plans seed error/timeout:', err));
   
-  console.log("[DEBUG] 11. Seeding billing plans...");
+  console.log("[DEBUG] 12. Seeding billing plans...");
   await Promise.race([
     storage.seedBillingPlans().catch(err => console.error('Failed to seed billing plans:', err)),
     new Promise((_, reject) => setTimeout(() => reject(new Error("Billing plans seed timeout")), 5000))
   ]).catch(err => console.warn('Billing plans seed error/timeout:', err));
   
   // Garantir que admin existe no banco
-  console.log("[DEBUG] 12. Ensuring admin exists...");
+  console.log("[DEBUG] 13. Ensuring admin exists...");
   await ensureAdminExists().catch(err => console.error('Failed to ensure admin:', err));
   
-  console.log("[DEBUG] 13. Setting up route handlers...");
+  console.log("[DEBUG] 14. Setting up route handlers...");
 
   const getUserId = (req: any) => req.userId;
   
@@ -2932,67 +2935,6 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
     }
   });
 
-  // ASAAS Webhook for payment status updates
-  app.post("/api/webhooks/asaas", async (req, res) => {
-    try {
-      const { event, payment: paymentData } = req.body;
-      
-      if (!paymentData?.id) {
-        return res.status(400).json({ message: 'Invalid webhook data' });
-      }
-
-      const existingPayment = await storage.getPaymentByProviderId(paymentData.id);
-      if (!existingPayment) {
-        console.log('Payment not found for webhook:', paymentData.id);
-        return res.status(200).json({ message: 'Payment not found, ignoring' });
-      }
-
-      let newStatus = existingPayment.status;
-      switch (event) {
-        case 'PAYMENT_CONFIRMED':
-        case 'PAYMENT_RECEIVED':
-          newStatus = 'paid';
-          break;
-        case 'PAYMENT_OVERDUE':
-          newStatus = 'overdue';
-          break;
-        case 'PAYMENT_DELETED':
-        case 'PAYMENT_REFUNDED':
-          newStatus = 'refunded';
-          break;
-        case 'PAYMENT_UPDATED':
-          newStatus = paymentData.status?.toLowerCase() || existingPayment.status;
-          break;
-      }
-
-      await storage.updatePayment(existingPayment.id, {
-        status: newStatus,
-        paidAt: newStatus === 'paid' ? new Date() : null
-      });
-
-      if (newStatus === 'paid' && existingPayment.subscriptionId) {
-        const subscription = await storage.getSubscription(existingPayment.subscriptionId);
-        if (subscription) {
-          await storage.updateSubscription(subscription.id, {
-            status: 'active',
-            lastPaymentStatus: 'paid'
-          });
-          await storage.updateUserStatus(subscription.userId, 'active');
-          notifyUser(subscription.userId, { 
-            type: 'subscription_activated', 
-            title: 'Assinatura Ativada',
-            message: 'Sua assinatura foi ativada com sucesso!' 
-          });
-        }
-      }
-
-      res.status(200).json({ received: true });
-    } catch (error: any) {
-      console.error('Webhook error:', error);
-      res.status(500).json({ message: error.message });
-    }
-  });
-
   // Admin: Manual payment confirmation
   app.post("/api/admin/subscription/confirm-payment/:paymentId", authenticate, checkAdmin, async (req, res) => {
     try {
@@ -3132,125 +3074,6 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
     res.json(payments);
   });
 
-  // --- Billing Checkout (Redirect to Asaas) ---
-  app.post("/api/billing/checkout", authenticate, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(401).json({ message: "Usuário não encontrado" });
-
-      const { planSlug, couponCode } = req.body;
-      const planSlugToUse = planSlug || 'mensal';
-      
-      let plan = await storage.getPlanBySlug(planSlugToUse);
-      if (!plan) {
-        await storage.upsertPlans();
-        plan = await storage.getPlanBySlug(planSlugToUse);
-      }
-      if (!plan) {
-        return res.status(400).json({ message: `Plano '${planSlugToUse}' não encontrado.` });
-      }
-
-      let priceCents = plan.priceCents;
-      let discountCents = 0;
-
-      if (couponCode) {
-        const coupon = await storage.getPromoCouponByCode(couponCode.toUpperCase().trim());
-        if (coupon && coupon.isActive) {
-          if (coupon.discountType === 'percentage') {
-            discountCents = Math.floor(priceCents * (Number(coupon.discountValue) / 100));
-          } else {
-            discountCents = Math.floor(Number(coupon.discountValue) * 100);
-          }
-        }
-      }
-
-      const finalValue = Math.max((priceCents - discountCents) / 100, 0);
-      
-      const asaasService = await import('./services/asaas');
-      if (!asaasService.isAsaasConfigured()) {
-        return res.status(503).json({ message: "Sistema de pagamento não configurado." });
-      }
-
-      // Get the app domain for success/cancel URLs
-      // Try Replit domain first, then use request headers (for Render/production)
-      let appDomain = process.env.REPLIT_DOMAINS?.split(',')[0] || process.env.REPLIT_DEV_DOMAIN;
-      
-      if (!appDomain) {
-        // Fallback: use request headers for production environments like Render
-        const protocol = req.headers["x-forwarded-proto"] || (process.env.NODE_ENV === "production" ? "https" : "http");
-        const host = req.headers.host || `localhost:${process.env.PORT || 5000}`;
-        appDomain = host;
-      }
-
-      const protocol = appDomain.includes('localhost') ? 'http' : 'https';
-      const baseUrl = `${protocol}://${appDomain}`;
-
-      const paymentLink = await asaasService.createPaymentLink({
-        name: `Assinatura Salva Plantão - ${plan.name}`,
-        description: `Assinatura ${plan.name} do Salva Plantão`,
-        value: finalValue,
-        billingType: 'UNDEFINED',
-        chargeType: 'DETACHED',
-        dueDateLimitDays: 7,
-        notificationEnabled: true,
-        callback: {
-          successUrl: `${baseUrl}/billing/success`,
-          autoRedirect: true
-        },
-        externalReference: `user-${userId}-plan-${plan.id}`
-      });
-
-      res.json({ 
-        url: paymentLink.url,
-        linkId: paymentLink.id
-      });
-    } catch (error: any) {
-      console.error('Error creating checkout:', error);
-      res.status(500).json({ message: error.message || 'Erro ao criar checkout' });
-    }
-  });
-
-  // Billing status check
-  app.get("/api/billing/status", authenticate, async (req, res) => {
-    const userId = getUserId(req);
-    const user = await storage.getUser(userId);
-    const subscription = await storage.getActiveSubscription(userId);
-    const billingStatus = await storage.getUserBillingStatus(userId);
-    
-    res.json({
-      isSubscribed: user?.status === 'active' || user?.role === 'admin',
-      userStatus: user?.status || 'pending',
-      isAdmin: user?.role === 'admin',
-      subscription: subscription ? {
-        status: subscription.status,
-        nextBillingDate: subscription.nextBillingDate
-      } : null,
-      billingStatus: billingStatus ? {
-        status: billingStatus.status,
-        planName: billingStatus.planName,
-        nextDueDate: billingStatus.nextDueDate,
-        overdueDays: billingStatus.overdueDays
-      } : null
-    });
-  });
-
-  // Get available plans
-  app.get("/api/billing/plans", async (req, res) => {
-    await storage.upsertPlans();
-    const allPlans = await storage.getPlans();
-    const activePlans = allPlans.filter((p: any) => p.isActive);
-    res.json(activePlans.map((p: any) => ({
-      id: p.id,
-      slug: p.slug,
-      name: p.name,
-      priceCents: p.priceCents,
-      priceDisplay: `R$ ${(p.priceCents / 100).toFixed(2).replace('.', ',')}`,
-      billingPeriod: p.billingPeriod,
-      cycle: p.cycle
-    })));
-  });
-
   // Also serve as /api/plans for backward compat
   app.get("/api/plans", async (req, res) => {
     await storage.upsertPlans();
@@ -3274,9 +3097,11 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
   app.get("/api/preview/status", authenticate, async (req, res) => {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
+    const hasEntitlement = await storage.hasActiveEntitlement(userId);
+    const hasFullAccess = user?.role === "admin" || user?.status === "active" || hasEntitlement;
     
     // Subscribers and admins have full access
-    if (user?.status === 'active' || user?.role === 'admin') {
+    if (hasFullAccess) {
       return res.json({
         isSubscribed: true,
         previewAllowed: false, // Not applicable
@@ -3327,9 +3152,11 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
   app.post("/api/preview/consume", authenticate, async (req, res) => {
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
+    const hasEntitlement = await storage.hasActiveEntitlement(userId);
+    const hasFullAccess = user?.role === "admin" || user?.status === "active" || hasEntitlement;
     
     // Subscribers don't consume preview actions
-    if (user?.status === 'active' || user?.role === 'admin') {
+    if (hasFullAccess) {
       return res.json({ consumed: false, reason: 'subscribed' });
     }
 
