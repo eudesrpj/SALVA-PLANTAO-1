@@ -89,16 +89,12 @@ export const chatStorage: IChatStorage = {
         throw new Error("Role inválido (deve ser 'user' ou 'assistant')");
       }
 
-      // Set expiration to 24 hours from now
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
       const [message] = await db
         .insert(messages)
         .values({
           conversationId,
           role,
           content: content.trim(),
-          expiresAt,
         })
         .returning();
 
@@ -115,10 +111,10 @@ export const chatStorage: IChatStorage = {
 
   async cleanExpiredMessages(): Promise<number> {
     try {
-      const now = new Date();
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const result = await db
         .delete(messages)
-        .where(lt(messages.expiresAt, now))
+        .where(lt(messages.createdAt, cutoff))
         .returning();
 
       console.log("[CHAT STORAGE] Cleaned", result.length, "expired messages");

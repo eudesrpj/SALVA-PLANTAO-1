@@ -18,7 +18,7 @@ const COLOR_OPTIONS: { value: ColorScheme; label: string; color: string }[] = [
   { value: "green", label: "Verde Saúde", color: "bg-emerald-600" },
   { value: "purple", label: "Roxo Premium", color: "bg-violet-600" },
   { value: "orange", label: "Laranja Energia", color: "bg-orange-500" },
-  { value: "rose", label: "Rosa Cuidado", color: "bg-rose-500" },
+  { value: "pink", label: "Rosa Cuidado", color: "bg-pink-500" },
 ];
 
 const FONT_OPTIONS: { value: FontSize; label: string; preview: string }[] = [
