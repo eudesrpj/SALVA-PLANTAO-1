@@ -46,6 +46,24 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// CORS middleware - permitir cookies com rewrite do Firebase
+app.use((req, res, next) => {
+  const origin = req.headers.origin || req.headers.referer?.split('/').slice(0, 3).join('/') || '*';
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Max-Age", "3600");
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  
+  next();
+});
+
 // Health check endpoint - FIRST MIDDLEWARE, before anything else
 app.get("/health", (_req, res) => {
   console.log("[DEBUG] /health endpoint called");

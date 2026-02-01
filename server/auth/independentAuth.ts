@@ -99,8 +99,11 @@ export function setAuthCookies(res: Response, userId: string): void {
   const refreshToken = createToken(userId, true);
   
   const isProduction = process.env.NODE_ENV === "production";
-  const sameSite = isProduction ? "none" : "lax"; // none em prod para CORS, lax em dev
-  const secure = isProduction; // true em prod (HTTPS obrigatório), false em dev
+  
+  // Em produção: secure=true (HTTPS obrigatório), sameSite=lax é mais seguro que none
+  // Em dev: secure=false (localhost), sameSite=lax
+  const secure = isProduction;
+  const sameSite = "lax"; // lax funciona bem com credentials: include
   
   res.cookie(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
