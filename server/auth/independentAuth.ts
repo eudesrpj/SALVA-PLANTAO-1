@@ -139,38 +139,39 @@ export function clearAuthCookies(res: Response): void {
  * Extract user from request (from cookies or header)
  */
 export function extractUser(req: Request): { userId: string } | null {
-  console.log(`🔍 Extracting user - Cookies: ${JSON.stringify(Object.keys(req.cookies || {}))}`);
-  console.log(`🔍 Auth header: ${req.headers.authorization ? 'present' : 'missing'}`);
+  const cookieKeys = Object.keys(req.cookies || {});
+  // NOTE: req.headers.authorization is automatically lowercased by Express
+  const authHeader = req.headers.authorization || req.headers.Authorization as string | undefined;
   
-  // Try cookie first
-  const token = req.cookies?.[AUTH_COOKIE_NAME];
-  if (token) {
-    console.log(`✓ Token found in cookie`);
-    const payload = verifyToken(token, false);
-    if (payload) {
-      console.log(`✓ Token verified, userId: ${payload.userId}`);
-      return payload;
-    }
-    console.log(`✗ Token verification failed`);
-  } else {
-    console.log(`✗ No token in cookie`);
-  }
+  console.log(`🔍 [AUTH] Extracting user...`);
+  console.log(`   Cookies found: ${cookieKeys.length > 0 ? cookieKeys.join(', ') : 'NONE'}`);
+  console.log(`   Auth Header: ${authHeader ? 'PRESENT' : 'MISSING'}`);
   
-  // Try authorization header (Bearer token)
-  const authHeader = req.headers.authorization;
+  // Try authorization header (Bearer token) - PRIORITY: Header first (more reliable with rewrites)
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
-    console.log(`✓ Token found in header`);
+    console.log(`✓ [AUTH] Token found in Authorization header`);
     const payload = verifyToken(token, false);
     if (payload) {
-      console.log(`✓ Token verified, userId: ${payload.userId}`);
+      console.log(`✓ [AUTH] Header token verified, userId: ${payload.userId}`);
       return payload;
     }
-    console.log(`✗ Token verification failed`);
-  } else {
-    console.log(`✗ No token in header`);
+    console.log(`✗ [AUTH] Header token verification failed`);
   }
   
+  // Try cookie as fallback
+  const token = req.cookies?.[AUTH_COOKIE_NAME];
+  if (token) {
+    console.log(`✓ [AUTH] Token found in cookie (fallback)`);
+    const payload = verifyToken(token, false);
+    if (payload) {
+      console.log(`✓ [AUTH] Cookie token verified, userId: ${payload.userId}`);
+      return payload;
+    }
+    console.log(`✗ [AUTH] Cookie token verification failed`);
+  }
+  
+  console.log(`✗ [AUTH] No valid token found`);
   return null;
 }
 

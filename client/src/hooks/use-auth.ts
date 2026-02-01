@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { User } from "@shared/models/auth";
+import { tokenStorage } from "@/lib/queryClient";
 
 async function fetchUser(): Promise<User | null> {
   const headers: Record<string, string> = {};
   
-  // Se tiver token no localStorage, enviar via header
-  const token = localStorage.getItem("auth_token");
+  // SEMPRE enviar token via header
+  const token = tokenStorage.get();
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -16,14 +17,18 @@ async function fetchUser(): Promise<User | null> {
   });
 
   if (response.status === 401) {
+    console.log("❌ Não autenticado (401)");
+    tokenStorage.clear();
     return null;
   }
 
   if (!response.ok) {
+    console.error(`❌ Erro ao buscar usuário: ${response.status}`);
     throw new Error(`${response.status}: ${response.statusText}`);
   }
 
   const data = await response.json();
+  console.log("✓ Usuário carregado:", data.email);
   
   // Transformar resposta de /api/auth/me para formato User
   return {
@@ -38,10 +43,20 @@ async function fetchUser(): Promise<User | null> {
 }
 
 async function logout(): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = tokenStorage.get();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  
   await fetch("/api/auth/logout", {
     method: "POST",
     credentials: "include",
+    headers,
   });
+  
+  // Limpar token do localStorage
+  tokenStorage.clear();
 }
 
 export function useAuth() {

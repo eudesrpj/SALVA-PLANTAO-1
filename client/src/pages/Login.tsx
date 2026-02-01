@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Loader2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, tokenStorage } from "@/lib/queryClient";
 import { useQueryClient } from "@tanstack/react-query";
 
 type AuthStep = "method" | "email" | "code" | "password";
@@ -107,9 +107,12 @@ export default function Login() {
     try {
       const response = await apiRequest("POST", "/api/auth/login-password", { email, password });
       
-      // Guardar token no localStorage se retornado (backup para quando cookies não funcionam)
+      // GUARDAR TOKEN NO LOCALSTORAGE
       if (response.token) {
-        localStorage.setItem("auth_token", response.token);
+        console.log("✓ Token recebido, salvando no localStorage");
+        tokenStorage.set(response.token);
+      } else {
+        console.error("✗ Token não retornado pelo servidor");
       }
       
       toast({
@@ -117,16 +120,24 @@ export default function Login() {
         description: "Bem-vindo ao Salva Plantão"
       });
       
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Aguardar um pouco para garantir que o token foi salvo
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Recarregar dados do usuário
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       const result = await queryClient.fetchQuery({ queryKey: ["/api/auth/me"] });
       
       if (result) {
+        console.log("✓ Usuário autenticado, navegando para Dashboard");
         navigate("/");
+      } else {
+        console.error("✗ Falha ao carregar dados do usuário");
+        setError("Falha ao carregar dados do usuário");
       }
     } catch (error: any) {
       const msg = error.message || "Credenciais inválidas";
       setError(msg);
+      console.error("❌ Erro no login:", msg);
       toast({
         title: "Erro",
         description: msg,

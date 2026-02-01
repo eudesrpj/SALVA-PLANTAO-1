@@ -1,5 +1,12 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// Token storage (localStorage backup)
+export const tokenStorage = {
+  get: () => typeof window !== 'undefined' ? localStorage.getItem("auth_token") : null,
+  set: (token: string) => typeof window !== 'undefined' && localStorage.setItem("auth_token", token),
+  clear: () => typeof window !== 'undefined' && localStorage.removeItem("auth_token"),
+};
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -14,8 +21,8 @@ export async function apiRequest(
 ): Promise<any> {
   const headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
   
-  // Se tiver token no localStorage, enviar via header (backup quando cookies não funcionam)
-  const token = localStorage.getItem("auth_token");
+  // SEMPRE enviar token via header quando disponível
+  const token = tokenStorage.get();
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -39,8 +46,8 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const headers: Record<string, string> = {};
     
-    // Se tiver token no localStorage, enviar via header
-    const token = localStorage.getItem("auth_token");
+    // SEMPRE enviar token via header
+    const token = tokenStorage.get();
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
