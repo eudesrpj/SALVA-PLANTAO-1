@@ -7,6 +7,9 @@ Contato oficial: suporte@appsalvaplantao.com
 */
 
 import express, { type Request, Response, NextFunction } from "express";
+import { readFileSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -14,6 +17,26 @@ import { setupWebSocket } from "./websocket";
 
 const app = express();
 const httpServer = createServer(app);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const appName = process.env.APP_NAME || "Salva Plantão";
+const appVersion = (() => {
+  try {
+    const packageJsonPath = path.resolve(__dirname, "..", "package.json");
+    const raw = readFileSync(packageJsonPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    return parsed?.version || "unknown";
+  } catch {
+    return process.env.APP_VERSION || "unknown";
+  }
+})();
+
+const buildCommit = process.env.BUILD_SHA || process.env.COMMIT_SHA || process.env.GIT_SHA || "unknown";
+const buildTime = process.env.BUILD_TIME || "unknown";
+
+app.set("trust proxy", 1);
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
@@ -66,6 +89,7 @@ app.use((req, res, next) => {
 // Health check endpoint - FIRST MIDDLEWARE, before anything else
 app.get("/health", (_req, res) => {
   console.log("[DEBUG] /health endpoint called");
+  res.setHeader("Content-Type", "application/json");
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -74,11 +98,26 @@ app.get("/health", (_req, res) => {
   });
 });
 
+app.get("/api/health", (req, res) => {
+  console.log("[DEBUG] /api/health endpoint called");
+  const apiBaseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  res.setHeader("Content-Type", "application/json");
+  res.json({
+    appName,
+    version: appVersion,
+    gitCommit: buildCommit,
+    buildTime,
+    serverTime: new Date().toISOString(),
+    apiBaseUrl,
+  });
+});
+
 // DEBUG: Listen state endpoint (PASSO 3)
 let serverInstance: any = null;
 app.get("/_debug/listen", (_req, res) => {
   try {
     const addr = serverInstance?.address?.() || "unknown";
+    res.setHeader("Content-Type", "application/json");
     res.json({
       pid: process.pid,
       port: parseInt(process.env.PORT || "5000", 10),
@@ -107,7 +146,7 @@ console.log("Iniciando servidor...");
 
 // Wrap in async IIFE to support await in CJS
 (async () => {
-  // Register routes NOW (before listen)
+  // Register ALL API routes FIRST, before any static serving
   try {
     await registerRoutes(httpServer, app);
     console.log("[DEBUG] Routes registered successfully");
@@ -116,7 +155,15 @@ console.log("Iniciando servidor...");
     process.exit(1);
   }
 
-  // Setup error handler NOW
+  // Setup static file serving AFTER all API routes
+  try {
+    serveStatic(app);
+    console.log("[DEBUG] Static file configuration complete");
+  } catch (error) {
+    console.error("[WARNING] Failed to configure static files:", error);
+  }
+
+  // Setup error handler LAST
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -127,14 +174,6 @@ console.log("Iniciando servidor...");
       res.status(status).json({ message });
     }
   });
-
-  // Setup static file serving NOW
-  try {
-    serveStatic(app);
-    console.log("[DEBUG] Static file configuration complete");
-  } catch (error) {
-    console.error("[WARNING] Failed to configure static files:", error);
-  }
 
   // ===== DIRECT LISTEN (proven working pattern) =====
   const port = parseInt(process.env.PORT || "5000", 10);
