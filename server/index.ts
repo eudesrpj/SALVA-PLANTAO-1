@@ -26,16 +26,19 @@ const __dirname = import.meta?.url
 const appName = process.env.APP_NAME || "Salva Plantão";
 const appVersion = (() => {
   try {
+    // Em produção (CommonJS), __dirname aponta para dist/, então package.json está em ../
+    // Em dev (ESM), __dirname aponta para server/, então package.json está em ../
     const packageJsonPath = path.resolve(__dirname, "..", "package.json");
     const raw = readFileSync(packageJsonPath, "utf-8");
     const parsed = JSON.parse(raw);
-    return parsed?.version || "unknown";
-  } catch {
-    return process.env.APP_VERSION || "unknown";
+    return parsed?.version || "1.0.0";
+  } catch (err) {
+    console.warn("[WARN] Could not read package.json:", err);
+    return process.env.APP_VERSION || "1.0.0";
   }
 })();
 
-const buildCommit = process.env.BUILD_SHA || process.env.COMMIT_SHA || process.env.GIT_SHA || "unknown";
+const buildCommit = (process.env.BUILD_SHA || process.env.COMMIT_SHA || process.env.GIT_SHA || "unknown").split(" ")[0];
 const buildTime = process.env.BUILD_TIME || "unknown";
 
 app.set("trust proxy", 1);
