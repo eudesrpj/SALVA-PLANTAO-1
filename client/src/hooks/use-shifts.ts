@@ -13,6 +13,19 @@ export function useShifts() {
       if (!res.ok) throw new Error("Failed to fetch shifts");
       return api.shifts.list.responses[200].parse(await res.json());
     },
+    staleTime: 30000, // 30 seconds - prevent over-fetching
+  });
+}
+
+export function useNextShift() {
+  return useQuery({
+    queryKey: ["/api/shifts/next"],
+    queryFn: async () => {
+      const res = await fetch("/api/shifts/next", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch next shift");
+      return res.json();
+    },
+    staleTime: 30000,
   });
 }
 
@@ -24,6 +37,7 @@ export function useShiftStats() {
       if (!res.ok) throw new Error("Failed to fetch stats");
       return api.shifts.stats.responses[200].parse(await res.json());
     },
+    staleTime: 30000,
   });
 }
 
@@ -41,8 +55,10 @@ export function useCreateShift() {
       return api.shifts.create.responses[201].parse(await res.json());
     },
     onSuccess: () => {
+      // Invalidate all shift-related queries
       queryClient.invalidateQueries({ queryKey: [api.shifts.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.shifts.stats.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shifts/next"] });
     },
   });
 }
@@ -64,6 +80,7 @@ export function useUpdateShift() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.shifts.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.shifts.stats.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shifts/next"] });
     },
   });
 }
@@ -79,6 +96,7 @@ export function useDeleteShift() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.shifts.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.shifts.stats.path] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shifts/next"] });
     },
   });
 }

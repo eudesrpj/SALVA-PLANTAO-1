@@ -1709,6 +1709,12 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
     res.json(stats);
   });
 
+  // Get next upcoming shift
+  app.get("/api/shifts/next", authenticate, checkNotBlocked, async (req, res) => {
+    const nextShift = await storage.getNextShift(getUserId(req));
+    res.json(nextShift);
+  });
+
   // --- Monthly Expenses ---
   app.get("/api/monthly-expenses", authenticate, checkNotBlocked, async (req, res) => {
     const items = await storage.getMonthlyExpenses(getUserId(req));

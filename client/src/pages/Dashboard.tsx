@@ -66,7 +66,10 @@ export default function Dashboard() {
   const { data: stats } = useShiftStats();
   const { data: shifts } = useShifts();
 
-  const nextShift = shifts?.find(s => new Date(s.date) >= new Date());
+  // Find next shift properly - shifts are already sorted by date in backend
+  const nextShift = shifts && shifts.length > 0 
+    ? shifts.find(s => new Date(s.date).getTime() >= Date.now())
+    : null;
 
   const container = {
     hidden: { opacity: 0 },

@@ -181,6 +181,7 @@ export interface IStorage {
   updateShift(id: number, item: UpdateShiftRequest): Promise<Shift>;
   deleteShift(id: number): Promise<void>;
   getShiftStats(userId: string): Promise<{ totalEarnings: number, totalHours: number, upcomingShifts: Shift[], monthlyGoal: number | null }>;
+  getNextShift(userId: string): Promise<Shift | null>;
 
   // Notes
   getNotes(userId: string): Promise<Note[]>;
@@ -991,7 +992,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateShift(id: number, updateItem: UpdateShiftRequest): Promise<Shift> {
-    const [item] = await db.update(shifts).set(updateItem).where(eq(shifts.id, id)).returning();
+    const [item] = await db.update(shifts)
+      .set({ ...updateItem, updatedAt: new Date() })
+      .where(eq(shifts.id, id))
+      .returning();
+    if (!item) throw new Error("Shift not found");
     return item;
   }
 
@@ -1014,7 +1019,8 @@ export class DatabaseStorage implements IStorage {
       if (shift.value) {
         totalEarnings += Number(shift.value);
       }
-      if (new Date(shift.date) >= now) {
+      // Compare timestamps properly without timezone conversion issues
+      if (shift.date.getTime() >= now.getTime()) {
         upcomingShifts.push(shift);
       }
       if (shift.type?.includes('12')) {
@@ -1026,7 +1032,7 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    upcomingShifts.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    upcomingShifts.sort((a, b) => a.date.getTime() - b.date.getTime());
 
     return { 
       totalEarnings, 
@@ -1034,6 +1040,17 @@ export class DatabaseStorage implements IStorage {
       upcomingShifts,
       monthlyGoal: userGoal ? Number(userGoal.targetAmount) : null
     };
+  }
+
+  async getNextShift(userId: string): Promise<Shift | null> {
+    const now = new Date();
+    const [nextShift] = await db.select().from(shifts)
+      .where(eq(shifts.userId, userId))
+      .orderBy(shifts.date)
+      .limit(1);
+    
+    if (!nextShift) return null;
+    return nextShift.date.getTime() >= now.getTime() ? nextShift : null;
   }
 
   // Notes

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, decimal, unique, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -570,7 +570,7 @@ export type InsertUsageStat = z.infer<typeof insertUsageStatSchema>;
 export const shifts = pgTable("shifts", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id),
-  date: timestamp("date").notNull(),
+  date: timestamp("date", { mode: "date", withTimezone: true }).notNull(),
   location: text("location").notNull(),
   type: text("type"), // Day, Night, 12h, 24h
   startTime: text("start_time"),
@@ -578,15 +578,20 @@ export const shifts = pgTable("shifts", {
   value: decimal("value", { precision: 10, scale: 2 }),
   isPaid: boolean("is_paid").default(false),
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  userIdDateIdx: index("shifts_user_id_date_idx").on(table.userId, table.date),
+}));
 
 export const insertShiftSchema = createInsertSchema(shifts, {
   date: z.coerce.date(),
   isPaid: z.boolean().optional().default(false),
-}).omit({ id: true, createdAt: true });
+}).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateShiftSchema = insertShiftSchema.partial();
 export type Shift = typeof shifts.$inferSelect;
 export type InsertShift = z.infer<typeof insertShiftSchema>;
+export type UpdateShift = z.infer<typeof updateShiftSchema>;
 
 // Notes
 export const notes = pgTable("notes", {

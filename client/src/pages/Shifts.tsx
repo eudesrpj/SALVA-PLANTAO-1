@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar as CalendarIcon, Plus, Trash2, Clock, MapPin, DollarSign, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -16,8 +16,9 @@ export default function Shifts() {
   const { data: shifts, isLoading } = useShifts();
   const [date, setDate] = useState<Date | undefined>(new Date());
 
+  // Fix timezone issue: compare dates properly
   const selectedShifts = shifts?.filter(s => 
-    date && new Date(s.date).toDateString() === date.toDateString()
+    date && isSameDay(new Date(s.date), date)
   );
 
   return (
@@ -81,7 +82,7 @@ export default function Shifts() {
             onSelect={setDate}
             className="rounded-md"
             modifiers={{
-              booked: (date) => shifts?.some(s => new Date(s.date).toDateString() === date.toDateString()) || false
+              booked: (calDate) => shifts?.some(s => isSameDay(new Date(s.date), calDate)) || false
             }}
             modifiersStyles={{
               booked: { fontWeight: 'bold', color: 'var(--primary)', textDecoration: 'underline decoration-blue-200' }
@@ -123,10 +124,11 @@ function ShiftDialog({ shift, date }: { shift?: any, date?: Date }) {
     const endTimeVal = formData.get("endTime") as string;
     const valueVal = formData.get("value") as string;
     
-    const normalizedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 12, 0, 0);
+    // Use startOfDay to avoid timezone issues - save as beginning of selected day
+    const normalizedDate = startOfDay(selectedDate);
     
     const data: Record<string, any> = {
-      date: normalizedDate,
+      date: normalizedDate.toISOString(),
       location: formData.get("location") as string,
     };
     
