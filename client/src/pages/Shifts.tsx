@@ -133,7 +133,12 @@ function ShiftDialog({ shift, date }: { shift?: any, date?: Date }) {
     if (typeVal) data.type = typeVal;
     if (startTimeVal) data.startTime = startTimeVal;
     if (endTimeVal) data.endTime = endTimeVal;
-    if (valueVal) data.value = valueVal;
+    if (valueVal) {
+      const normalizedValue = valueVal.includes(",")
+        ? valueVal.replace(/\./g, "").replace(",", ".")
+        : valueVal;
+      data.value = normalizedValue;
+    }
 
     try {
       if (shift) {

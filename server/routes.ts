@@ -1652,6 +1652,20 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
   });
 
   // --- Shifts ---
+  const normalizeShiftValue = (value: unknown) => {
+    if (value === null || value === undefined || value === "") return undefined;
+    if (typeof value === "number") return value.toString();
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      if (trimmed.includes(",")) {
+        return trimmed.replace(/\./g, "").replace(",", ".");
+      }
+      return trimmed;
+    }
+    return value;
+  };
+
   app.get(api.shifts.list.path, authenticate, checkNotBlocked, async (req, res) => {
     const items = await storage.getShifts(getUserId(req));
     res.json(items);
@@ -1659,7 +1673,10 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
 
   app.post(api.shifts.create.path, authenticate, checkNotBlocked, async (req, res) => {
     try {
-      const input = api.shifts.create.input.parse(req.body);
+      const input = api.shifts.create.input.parse({
+        ...req.body,
+        value: normalizeShiftValue(req.body?.value)
+      });
       const item = await storage.createShift({ ...input, userId: getUserId(req) });
       res.status(201).json(item);
     } catch (err) {
@@ -1670,7 +1687,10 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
 
   app.put(api.shifts.update.path, authenticate, checkNotBlocked, async (req, res) => {
     try {
-      const input = api.shifts.update.input.parse(req.body);
+      const input = api.shifts.update.input.parse({
+        ...req.body,
+        value: normalizeShiftValue(req.body?.value)
+      });
       const item = await storage.updateShift(Number(req.params.id), input);
       res.json(item);
     } catch (err) {
