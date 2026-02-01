@@ -79,8 +79,44 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 relative min-h-screen">
+      {/* Watermark */}
+      <div className="fixed bottom-0 right-0 w-96 h-96 pointer-events-none opacity-5 z-0">
+        <svg viewBox="0 0 200 200" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Background circle */}
+          <circle cx="100" cy="100" r="95" fill="#10b981" opacity="0.3"/>
+          
+          {/* Head */}
+          <circle cx="100" cy="70" r="25" fill="#10b981"/>
+          
+          {/* Face */}
+          <circle cx="95" cy="65" r="3" fill="#ffffff"/>
+          <circle cx="105" cy="65" r="3" fill="#ffffff"/>
+          
+          {/* Smile */}
+          <path d="M 95 72 Q 100 75 105 72" stroke="#ffffff" strokeWidth="2" strokeLinecap="round"/>
+          
+          {/* Body */}
+          <rect x="75" y="100" width="50" height="45" rx="8" fill="#10b981"/>
+          
+          {/* Arms */}
+          <rect x="50" y="105" width="25" height="12" rx="6" fill="#10b981" transform="rotate(-20 62.5 111)"/>
+          <rect x="125" y="105" width="25" height="12" rx="6" fill="#10b981" transform="rotate(20 137.5 111)"/>
+          
+          {/* Stethoscope around neck */}
+          <path d="M 80 95 Q 100 110 120 95" stroke="#ef4444" strokeWidth="3" fill="none" strokeLinecap="round"/>
+          
+          {/* Legs */}
+          <rect x="85" y="145" width="8" height="35" rx="4" fill="#10b981"/>
+          <rect x="107" y="145" width="8" height="35" rx="4" fill="#10b981"/>
+          
+          {/* Plus sign on chest (medical) */}
+          <line x1="98" y1="115" x2="102" y2="115" stroke="#ffffff" strokeWidth="2" strokeLinecap="round"/>
+          <line x1="100" y1="113" x2="100" y2="117" stroke="#ffffff" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      </div>
+
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
         <div>
           <h1 className="text-3xl md:text-4xl font-bold font-display text-slate-900">
             Olá, <span className="text-primary">Dr. {user?.lastName || user?.firstName}</span>
@@ -97,7 +133,7 @@ export default function Dashboard() {
         variants={container}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+        className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10"
       >
         {/* Quick Stats */}
         <motion.div variants={item} className="col-span-1 md:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
