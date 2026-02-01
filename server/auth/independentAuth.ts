@@ -99,8 +99,8 @@ export function setAuthCookies(res: Response, userId: string): void {
   const refreshToken = createToken(userId, true);
   
   const isProduction = process.env.NODE_ENV === "production";
-  const sameSite = isProduction ? "strict" : "lax"; // lax permite cookies cross-site em dev
-  const secure = false; // false em dev (localhost não é HTTPS)
+  const sameSite = isProduction ? "none" : "lax"; // none em prod para CORS, lax em dev
+  const secure = isProduction; // true em prod (HTTPS obrigatório), false em dev
   
   res.cookie(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
@@ -118,7 +118,7 @@ export function setAuthCookies(res: Response, userId: string): void {
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
   
-  console.log(`🍪 Cookies setados para ${userId}`);
+  console.log(`🍪 Cookies setados para ${userId} (secure=${secure}, sameSite=${sameSite})`);
 }
 
 /**
@@ -133,13 +133,22 @@ export function clearAuthCookies(res: Response): void {
  * Extract user from request (from cookies or header)
  */
 export function extractUser(req: Request): { userId: string } | null {
+  console.log(`[AUTH] extractUser called for ${req.path}`);
+  console.log(`[AUTH] Cookies available:`, Object.keys(req.cookies || {}));
+  
   // Try cookie first
   const token = req.cookies?.[AUTH_COOKIE_NAME];
   if (token) {
+    console.log(`[AUTH] Found auth_token cookie, verifying...`);
     const payload = verifyToken(token, false);
     if (payload) {
+      console.log(`[AUTH] Token verified successfully for user ${payload.userId}`);
       return payload;
+    } else {
+      console.log(`[AUTH] Token verification failed`);
     }
+  } else {
+    console.log(`[AUTH] No auth_token cookie found`);
   }
   
   // Try authorization header (Bearer token)
@@ -148,10 +157,12 @@ export function extractUser(req: Request): { userId: string } | null {
     const token = authHeader.substring(7);
     const payload = verifyToken(token, false);
     if (payload) {
+      console.log(`[AUTH] Bearer token verified for user ${payload.userId}`);
       return payload;
     }
   }
   
+  console.log(`[AUTH] No valid authentication found`);
   return null;
 }
 

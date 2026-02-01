@@ -55,16 +55,22 @@ export function registerAuthRoutes(app: Express) {
         return res.status(500).json({ message: "Erro ao buscar usuário" });
       }
       
-      (req.session as any).userId = user.id;
-      (req.session as any).user = {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        status: user.status,
-        profileImageUrl: user.profileImageUrl
-      };
+      if (req.session) {
+        (req.session as any).userId = user.id;
+        (req.session as any).user = {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          status: user.status,
+          profileImageUrl: user.profileImageUrl
+        };
+      }
+
+      console.log(`[AUTH] Setting cookies for user ${user.id} (${user.email})`);
+      setAuthCookies(res, user.id);
+      console.log(`[AUTH] Cookies set successfully for ${user.email}`);
       
       res.json({ 
         success: true, 
@@ -104,16 +110,22 @@ export function registerAuthRoutes(app: Express) {
         return res.redirect("/login?error=user_not_found");
       }
       
-      (req.session as any).userId = user.id;
-      (req.session as any).user = {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        status: user.status,
-        profileImageUrl: user.profileImageUrl
-      };
+      if (req.session) {
+        (req.session as any).userId = user.id;
+        (req.session as any).user = {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          status: user.status,
+          profileImageUrl: user.profileImageUrl
+        };
+      }
+
+      console.log(`[AUTH] Magic link verified, setting cookies for ${user.email}`);
+      setAuthCookies(res, user.id);
+      console.log(`[AUTH] Redirecting to dashboard`);
       
       res.redirect("/");
     } catch (error) {
@@ -123,6 +135,11 @@ export function registerAuthRoutes(app: Express) {
   });
 
   app.post("/api/auth/logout", (req, res) => {
+    if (!req.session) {
+      res.clearCookie("connect.sid");
+      return res.json({ success: true });
+    }
+
     req.session.destroy((err) => {
       if (err) {
         console.error("Logout error:", err);
@@ -155,7 +172,9 @@ export function registerAuthRoutes(app: Express) {
       }
       
       // Set auth cookies (mesma forma que o sistema JWT)
+      console.log(`[AUTH] Password login successful for ${user.email}, setting cookies`);
       setAuthCookies(res, user.id);
+      console.log(`[AUTH] Cookies set for password login`);
       
       res.json({ 
         ok: true,
@@ -188,6 +207,11 @@ export function registerAuthRoutes(app: Express) {
       return res.status(500).json({ message: result.error });
     }
     
+    if (!req.session) {
+      res.clearCookie("connect.sid");
+      return res.json({ success: true });
+    }
+
     req.session.destroy((err) => {
       if (err) {
         console.error("Session destroy error:", err);
