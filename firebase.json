@@ -6,31 +6,40 @@
     "trailingSlash": false,
     "rewrites": [
       {
-        "source": "**",
+        "source": "/api/**",
         "run": {
           "serviceId": "salva-plantao-prod",
           "region": "southamerica-east1"
         }
-      }
-    ],
-    "redirects": [
+      },
       {
-        "source": "/old-path",
-        "destination": "/new-path",
-        "type": 301
+        "source": "/ws",
+        "run": {
+          "serviceId": "salva-plantao-prod",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
       }
     ],
     "headers": [
       {
-        "source": "**",
+        "source": "/index.html",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache"
-          },
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/assets/**",
+        "headers": [
           {
-            "key": "X-Content-Type-Options",
-            "value": "nosniff"
+            "key": "Cache-Control",
+            "value": "max-age=31536000, immutable"
           }
         ]
       }

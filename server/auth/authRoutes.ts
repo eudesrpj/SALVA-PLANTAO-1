@@ -68,9 +68,7 @@ export function registerAuthRoutes(app: Express) {
         };
       }
 
-      console.log(`[AUTH] Setting cookies for user ${user.id} (${user.email})`);
       setAuthCookies(res, user.id);
-      console.log(`[AUTH] Cookies set successfully for ${user.email}`);
       
       res.json({ 
         success: true, 
@@ -123,9 +121,7 @@ export function registerAuthRoutes(app: Express) {
         };
       }
 
-      console.log(`[AUTH] Magic link verified, setting cookies for ${user.email}`);
       setAuthCookies(res, user.id);
-      console.log(`[AUTH] Redirecting to dashboard`);
       
       res.redirect("/");
     } catch (error) {
@@ -172,9 +168,7 @@ export function registerAuthRoutes(app: Express) {
       }
       
       // Set auth cookies (mesma forma que o sistema JWT)
-      console.log(`[AUTH] Password login successful for ${user.email}, setting cookies`);
       setAuthCookies(res, user.id);
-      console.log(`[AUTH] Cookies set for password login`);
       
       res.json({ 
         ok: true,

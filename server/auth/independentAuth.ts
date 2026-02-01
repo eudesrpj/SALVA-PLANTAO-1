@@ -136,22 +136,13 @@ export function clearAuthCookies(res: Response): void {
  * Extract user from request (from cookies or header)
  */
 export function extractUser(req: Request): { userId: string } | null {
-  console.log(`[AUTH] extractUser called for ${req.path}`);
-  console.log(`[AUTH] Cookies available:`, Object.keys(req.cookies || {}));
-  
   // Try cookie first
   const token = req.cookies?.[AUTH_COOKIE_NAME];
   if (token) {
-    console.log(`[AUTH] Found auth_token cookie, verifying...`);
     const payload = verifyToken(token, false);
     if (payload) {
-      console.log(`[AUTH] Token verified successfully for user ${payload.userId}`);
       return payload;
-    } else {
-      console.log(`[AUTH] Token verification failed`);
     }
-  } else {
-    console.log(`[AUTH] No auth_token cookie found`);
   }
   
   // Try authorization header (Bearer token)
@@ -160,12 +151,10 @@ export function extractUser(req: Request): { userId: string } | null {
     const token = authHeader.substring(7);
     const payload = verifyToken(token, false);
     if (payload) {
-      console.log(`[AUTH] Bearer token verified for user ${payload.userId}`);
       return payload;
     }
   }
   
-  console.log(`[AUTH] No valid authentication found`);
   return null;
 }
 

@@ -58,10 +58,10 @@ export default function Login() {
         description: "Login realizado com sucesso"
       });
       
-      // Aguardar um pouco para garantir que o cookie foi definido
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Aguardar um momento para garantir que o cookie foi definido
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Invalidar cache e refetch antes de navegar
+      // Refetch do usuário
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
       
@@ -94,23 +94,14 @@ export default function Login() {
         description: "Login realizado com sucesso"
       });
       
-      // Aguardar um pouco para garantir que o cookie foi definido
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Aguardar um momento para garantir que o cookie foi definido
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Invalidar cache e aguardar refetch antes de navegar
+      // Refetch do usuário
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      const fetchResult = await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/auth/me"] });
       
-      // Verificar se conseguiu carregar o usuário
-      if (fetchResult.isSuccess || fetchResult.length > 0) {
-        navigate("/");
-      } else {
-        toast({
-          title: "Erro",
-          description: "Falha ao carregador dados do usuário. Tente novamente.",
-          variant: "destructive"
-        });
-      }
+      navigate("/");
     } catch (error: any) {
       toast({
         title: "Erro",
