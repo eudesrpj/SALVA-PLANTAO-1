@@ -3459,9 +3459,14 @@ export class DatabaseStorage implements IStorage {
     return event;
   }
 
-  async markWebhookEventProcessed(id: number, status: "processed" | "failed" = "processed"): Promise<WebhookEvent | undefined> {
+  async markWebhookEventProcessed(id: number, status: "processed" | "failed" = "processed", errorMessage?: string): Promise<WebhookEvent | undefined> {
     const [event] = await db.update(webhookEvents)
-      .set({ processingStatus: status, processedAt: new Date() })
+      .set({ 
+        status, 
+          processingStatus: status,
+          processedAt: sql`now()`,
+        errorMessage: errorMessage || null
+      })
       .where(eq(webhookEvents.id, id))
       .returning();
     return event;

@@ -17,23 +17,26 @@ import { setupWebSocket } from "./websocket";
 
 const app = express();
 const httpServer = createServer(app);
-
 // Em CommonJS (build), import.meta.url é undefined, então usamos process.cwd()
-const __dirname = import.meta?.url 
+const __dirname: string = import.meta?.url 
   ? path.dirname(fileURLToPath(import.meta.url))
-  : __dirname || process.cwd();
+  : process.cwd();
 
 const appName = process.env.APP_NAME || "Salva Plantão";
 const appVersion = (() => {
   try {
     // Em produção (CommonJS), __dirname aponta para dist/, então package.json está em ../
     // Em dev (ESM), __dirname aponta para server/, então package.json está em ../
-    const packageJsonPath = path.resolve(__dirname, "..", "package.json");
+    // Usar sempre process.cwd() para evitar path relativo errado
+    const packageJsonPath = path.resolve(process.cwd(), "package.json");
     const raw = readFileSync(packageJsonPath, "utf-8");
     const parsed = JSON.parse(raw);
     return parsed?.version || "1.0.0";
   } catch (err) {
-    console.warn("[WARN] Could not read package.json:", err);
+    // Silenciar warning se package.json não encontrado (fallback seguro)
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[WARN] Could not read package.json from:", path.resolve(process.cwd(), "package.json"));
+    }
     return process.env.APP_VERSION || "1.0.0";
   }
 })();

@@ -240,117 +240,85 @@ export function registerBillingRoutes(app: Express) {
   });
 
   app.post("/api/webhooks/asaas", async (req, res) => {
+    // WEBHOOK HANDLER - ALWAYS RETURN 200 TO ASAAS
+    // Idempotency is guaranteed by eventKey unique constraint + status check
+    
     try {
+      // 1. VALIDATE WEBHOOK TOKEN (Security)
       const webhookToken = process.env.ASAAS_WEBHOOK_TOKEN;
       const headerToken = req.headers["x-asaas-webhook-token"] as string | undefined;
+      
       if (webhookToken && webhookToken !== headerToken) {
+        console.warn("[WEBHOOK] Invalid token received");
         return res.status(401).json({ message: "Webhook token inválido" });
       }
 
+      // 2. EXTRACT & VALIDATE PAYLOAD (Minimal)
       const { event, payment } = req.body;
+      
+      if (!event || !payment?.id) {
+        console.warn("[WEBHOOK] Missing event or payment.id", { event, paymentId: payment?.id });
+        return res.status(400).json({ message: "Evento ou ID de pagamento não encontrado" });
+      }
 
-      const eventKey = `${event || "unknown"}:${payment?.id || "no-id"}:${payment?.externalReference || "no-ref"}`;
+      // 3. BUILD STABLE EVENT KEY FOR IDEMPOTENCY
+      // eventKey = provider:event:paymentId (ensures uniqueness)
+      const eventKey = `asaas:${event}:${payment.id}`;
+      
+      console.log(`[WEBHOOK] Processing event: ${eventKey}`);
+
+      // 4. CHECK IF ALREADY PROCESSED (Idempotency Check)
       const existingEvent = await storage.getWebhookEventByKey(eventKey);
-      if (existingEvent?.processingStatus === "processed") {
-        return res.json({ received: true, duplicate: true });
-      }
-
-      const createdEvent = existingEvent || await storage.createWebhookEvent({
-        eventType: event || "unknown",
-        eventKey,
-        rawPayload: req.body
-      });
-
-      if (event !== "PAYMENT_CONFIRMED" && event !== "PAYMENT_RECEIVED" && event !== "PAYMENT_UPDATED") {
-        await storage.markWebhookEventProcessed(createdEvent.id, "processed");
-        return res.json({ received: true });
-      }
-
-      const externalReference = payment?.externalReference;
-      if (externalReference?.includes("|")) {
-        const [userId, orderIdStr] = externalReference.split("|");
-        const orderId = parseInt(orderIdStr);
-
-        if (userId && !isNaN(orderId)) {
-          const order = await storage.getBillingOrder(orderId);
-          if (order && order.status !== "paid") {
-            await storage.updateBillingOrder(orderId, {
-              status: "paid",
-              paidAt: new Date()
-            });
-
-            const plan = await storage.getBillingPlan(order.planCode);
-            if (plan) {
-              await storage.activateUserEntitlement(userId, order.planCode, plan.durationDays, orderId);
-              await storage.updateUserStatus(userId, "active");
-            }
-
-            if (order.couponCode) {
-              const coupon = await storage.getPromoCouponByCode(order.couponCode);
-              if (coupon) {
-                await storage.updatePromoCoupon(coupon.id, {
-                  currentUses: (coupon.currentUses || 0) + 1
-                } as any);
-              }
-            }
-          }
+      
+      if (existingEvent) {
+        // Event already recorded in DB
+          if (existingEvent.processingStatus === "processed") {
+          // ✅ Already successfully processed - return 200 (Idempotent!)
+          console.log(`[WEBHOOK] Event already processed: ${eventKey}`);
+          return res.json({ received: true, duplicate: true, processedAt: existingEvent.processedAt });
+          } else if (existingEvent.processingStatus === "failed") {
+          // ⚠️ Previous attempt failed - log but return 200 to avoid retry loop
+          console.log(`[WEBHOOK] Event previously failed: ${eventKey}, retrying...`);
+          // Fall through to retry processing
         }
       }
 
-      if (payment?.id) {
-        const existingPayment = await storage.getPaymentByProviderId(payment.id);
-        if (existingPayment) {
-          let newStatus = existingPayment.status;
-          switch (event) {
-            case "PAYMENT_CONFIRMED":
-            case "PAYMENT_RECEIVED":
-              newStatus = "paid";
-              break;
-            case "PAYMENT_OVERDUE":
-              newStatus = "overdue";
-              break;
-            case "PAYMENT_DELETED":
-            case "PAYMENT_REFUNDED":
-              newStatus = "refunded";
-              break;
-            case "PAYMENT_UPDATED":
-              newStatus = payment.status?.toLowerCase() || existingPayment.status;
-              break;
-          }
-
-          await storage.updatePayment(existingPayment.id, {
-            status: newStatus,
-            paidAt: newStatus === "paid" ? new Date() : null
-          });
-
-          if (newStatus === "paid" && existingPayment.subscriptionId) {
-            const subscription = await storage.getSubscription(existingPayment.subscriptionId);
-            if (subscription) {
-              await storage.updateSubscription(subscription.id, {
-                status: "active",
-                lastPaymentStatus: "paid"
-              });
-              await storage.updateUserStatus(subscription.userId, "active");
-            }
-          }
-        }
+      // 5. RECORD WEBHOOK RECEIPT (if new)
+      let webhookRecord = existingEvent;
+      if (!webhookRecord) {
+        webhookRecord = await storage.createWebhookEvent({
+          provider: "asaas",
+          eventType: event,
+          eventKey,
+          payload: req.body,
+            processingStatus: "pending"
+        });
+        console.log(`[WEBHOOK] Event recorded: id=${webhookRecord.id}, eventKey=${eventKey}`);
       }
 
-      await storage.markWebhookEventProcessed(createdEvent.id, "processed");
-      res.json({ received: true });
-    } catch (error) {
-      console.error("Webhook processing error:", error);
+      // 6. PROCESS EVENT (idempotent logic)
       try {
-        const { event, payment } = req.body || {};
-        const eventKey = `${event || "unknown"}:${payment?.id || "no-id"}:${payment?.externalReference || "no-ref"}`;
-        const existingEvent = await storage.getWebhookEventByKey(eventKey);
-        if (existingEvent) {
-          await storage.markWebhookEventProcessed(existingEvent.id, "failed");
-        }
-      } catch (innerError) {
-        console.error("Webhook event update error:", innerError);
+        await processAsaasPaymentEvent(event, payment);
+        
+        // 7. MARK AS PROCESSED
+        await storage.markWebhookEventProcessed(webhookRecord.id, "processed");
+        console.log(`[WEBHOOK] Event processed successfully: ${eventKey}`);
+        
+        return res.json({ received: true, status: "processed" });
+      } catch (processError) {
+        // 8. MARK AS ERROR (but still return 200)
+        const errorMessage = processError instanceof Error ? processError.message : "Unknown error";
+        await storage.markWebhookEventProcessed(webhookRecord.id, "failed", errorMessage);
+        console.error(`[WEBHOOK] Error processing event ${eventKey}:`, processError);
+        
+        // ✅ IMPORTANT: Return 200 to Asaas even if processing failed
+        // Asaas shouldn't retry on our processing errors - that's our responsibility
+        return res.json({ received: true, status: "error", message: errorMessage });
       }
-      res.status(500).json({ message: "Webhook processing error" });
+    } catch (error) {
+      // Catastrophic error (DB issue, etc) - still return 200
+      console.error("[WEBHOOK] Catastrophic error:", error);
+      return res.status(200).json({ received: true, error: true, message: "Internal processing error" });
     }
   });
 
@@ -403,6 +371,113 @@ export function registerBillingRoutes(app: Express) {
       res.status(500).json({ valid: false, message: "Erro ao validar cupom" });
     }
   });
+}
+
+/**
+ * Process Asaas payment event with idempotent logic
+ * This function is called after webhook idempotency check
+ * All database updates should be safe to run multiple times
+ */
+async function processAsaasPaymentEvent(event: string, payment: any): Promise<void> {
+  const externalReference = payment?.externalReference;
+
+  // Handle relevant payment events
+  const paymentEvents = ["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED", "PAYMENT_UPDATED", "PAYMENT_OVERDUE", "PAYMENT_DELETED", "PAYMENT_REFUNDED"];
+  if (!paymentEvents.includes(event)) {
+    console.log(`[PAYMENT] Event ${event} does not require processing`);
+    return;
+  }
+
+  // Determine new payment status based on event type
+  let newStatus: string;
+  switch (event) {
+    case "PAYMENT_CONFIRMED":
+    case "PAYMENT_RECEIVED":
+      newStatus = "PAID";
+      break;
+    case "PAYMENT_OVERDUE":
+      newStatus = "FAILED";
+      break;
+    case "PAYMENT_DELETED":
+    case "PAYMENT_REFUNDED":
+      newStatus = "REFUNDED";
+      break;
+    case "PAYMENT_UPDATED":
+      newStatus = (payment.status?.toUpperCase?.() || "pending");
+      break;
+    default:
+      newStatus = "pending";
+  }
+
+  console.log(`[PAYMENT] Processing event: ${event} → status: ${newStatus}`);
+
+  // BILLING ORDER UPDATE
+  if (externalReference?.includes("|")) {
+    const [userId, orderIdStr] = externalReference.split("|");
+    const orderId = parseInt(orderIdStr);
+
+    if (userId && !isNaN(orderId)) {
+      const order = await storage.getBillingOrder(orderId);
+      if (order) {
+        // Only mark as paid if not already in final state
+        if (newStatus === "PAID" && order.status !== "PAID") {
+          console.log(`[BILLING] Marking order ${orderId} as PAID`);
+          await storage.updateBillingOrder(orderId, {
+            status: "PAID",
+            paidAt: new Date()
+          });
+
+          // Activate user entitlement
+          const plan = await storage.getBillingPlan(order.planCode);
+          if (plan) {
+            console.log(`[ENTITLEMENT] Activating ${order.planCode} for user ${userId}`);
+            await storage.activateUserEntitlement(userId, order.planCode, plan.durationDays, orderId);
+            await storage.updateUserStatus(userId, "active");
+          }
+
+          // Increment coupon usage if applicable
+          if (order.couponCode) {
+            const coupon = await storage.getPromoCouponByCode(order.couponCode);
+            if (coupon) {
+              console.log(`[COUPON] Incrementing usage for ${order.couponCode}`);
+              await storage.updatePromoCoupon(coupon.id, {
+                currentUses: (coupon.currentUses || 0) + 1
+              } as any);
+            }
+          }
+        }
+      } else {
+        console.warn(`[BILLING] Order not found: ${orderId}`);
+      }
+    }
+  }
+
+  // PAYMENT TRACKING (if available)
+  if (payment?.id) {
+    const existingPayment = await storage.getPaymentByProviderId(payment.id);
+    if (existingPayment) {
+      console.log(`[PAYMENT] Updating payment ${payment.id} status to ${newStatus}`);
+      await storage.updatePayment(existingPayment.id, {
+        status: newStatus,
+        paidAt: newStatus === "PAID" ? new Date() : null
+      });
+
+      // Update associated subscription if paid
+      if (newStatus === "PAID" && existingPayment.subscriptionId) {
+        const subscription = await storage.getSubscription(existingPayment.subscriptionId);
+        if (subscription) {
+          console.log(`[SUBSCRIPTION] Activating subscription ${existingPayment.subscriptionId}`);
+          await storage.updateSubscription(subscription.id, {
+            status: "active",
+            lastPaymentStatus: "PAID"
+          });
+          await storage.updateUserStatus(subscription.userId, "active");
+        }
+      }
+    }
+  }
+
+  console.log(`[PAYMENT] Event processed successfully: ${event}`);
 }
 
 function mapPlanSlugToCode(planSlug?: string): string | null {
