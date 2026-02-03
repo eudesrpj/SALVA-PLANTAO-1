@@ -10,7 +10,7 @@ if (!connectionString) {
   process.exit(1);
 }
 
-const NEW_PASSWORD = "admin123";
+const NEW_PASSWORD = "Eudes.2020";
 const ADMIN_EMAIL = "eudesrpj@gmail.com";
 
 async function resetPassword() {

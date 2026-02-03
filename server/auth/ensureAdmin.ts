@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { authStorage } from "../replit_integrations/auth/storage";
+import { storage } from "../storage";
 
 const ADMIN_EMAIL = "eudesrpj@gmail.com";
 const ADMIN_PASSWORD = "Spdf0123";
@@ -10,12 +10,12 @@ const ADMIN_PASSWORD = "Spdf0123";
  */
 export async function ensureAdminExists(): Promise<void> {
   try {
-    const existingUser = await authStorage.getUserByEmail(ADMIN_EMAIL);
+    const existingUser = await storage.getUserByEmail(ADMIN_EMAIL);
     const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
     
     if (!existingUser) {
       // Criar novo admin
-      await authStorage.upsertUser({
+      await storage.upsertUser({
         email: ADMIN_EMAIL,
         firstName: "Admin",
         lastName: "Salva Plantão",
@@ -29,7 +29,7 @@ export async function ensureAdminExists(): Promise<void> {
     } else {
       // Atualizar apenas se necessário
       if (existingUser.role !== "admin" || existingUser.status !== "active" || !existingUser.passwordHash) {
-        await authStorage.upsertUser({
+        await storage.upsertUser({
           ...existingUser,
           role: "admin",
           status: "active",

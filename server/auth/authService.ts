@@ -1,6 +1,5 @@
 import bcrypt from "bcryptjs";
 import { storage } from "../storage";
-import { authStorage } from "../replit_integrations/auth/storage";
 import { generateCode, generateToken, sendAuthEmail } from "./emailService";
 
 const TOKEN_EXPIRY_MINUTES = 10;
@@ -99,11 +98,11 @@ async function findOrCreateUserByEmail(email: string) {
   const identity = await storage.getAuthIdentityByProvider("email", email);
   
   if (identity) {
-    const user = await authStorage.getUser(identity.userId);
+    const user = await storage.getUser(identity.userId);
     if (user) return user;
   }
   
-  const existingUser = await authStorage.getUserByEmail(email);
+  const existingUser = await storage.getUserByEmail(email);
   if (existingUser) {
     const existingIdentity = await storage.getAuthIdentityByProvider("email", email);
     if (!existingIdentity) {
@@ -117,7 +116,7 @@ async function findOrCreateUserByEmail(email: string) {
     return existingUser;
   }
   
-  const newUser = await authStorage.upsertUser({
+  const newUser = await storage.upsertUser({
     email,
     authProvider: "email",
     status: "pending"

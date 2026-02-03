@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from "express";
 import * as openid from "openid-client";
 import { storage } from "../storage";
-import { authStorage } from "../replit_integrations/auth/storage";
 import { createToken, setAuthCookies } from "./independentAuth";
 
 const GOOGLE_ISSUER_URL = "https://accounts.google.com";
@@ -128,16 +127,16 @@ export function registerGoogleAuthRoutes(app: Express) {
       let user = null;
       const existingIdentity = await storage.getAuthIdentityByProvider("google", googleUserId);
       if (existingIdentity) {
-        user = await authStorage.getUser(existingIdentity.userId);
+        user = await storage.getUser(existingIdentity.userId);
       }
 
       if (!user) {
-        const existingUser = await authStorage.getUserByEmail(email);
+        const existingUser = await storage.getUserByEmail(email);
         if (existingUser) {
           user = existingUser;
         } else {
           const { firstName, lastName } = splitName(name);
-          user = await authStorage.upsertUser({
+          user = await storage.upsertUser({
             email,
             firstName,
             lastName,

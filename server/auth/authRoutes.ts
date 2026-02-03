@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { requestEmailAuth, verifyEmailCode, verifyMagicLink, deleteUserAccount } from "./authService";
-import { authStorage } from "../replit_integrations/auth/storage";
 import { setAuthCookies, clearAuthCookies, createToken, authenticate } from "./independentAuth";
 import { storage } from "../storage";
 import bcrypt from "bcryptjs";
@@ -51,7 +50,7 @@ export function registerAuthRoutes(app: Express) {
         return res.status(400).json({ message: result.error });
       }
       
-      const user = await authStorage.getUser(result.userId!);
+      const user = await storage.getUser(result.userId!);
       
       if (!user) {
         return res.status(500).json({ message: "Erro ao buscar usuário" });
@@ -107,7 +106,7 @@ export function registerAuthRoutes(app: Express) {
         return res.redirect("/login?error=expired_token");
       }
       
-      const user = await authStorage.getUser(result.userId!);
+      const user = await storage.getUser(result.userId!);
       
       if (!user) {
         return res.redirect("/login?error=user_not_found");

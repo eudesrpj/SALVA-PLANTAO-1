@@ -1,8 +1,8 @@
 import { Express } from "express";
 import { z } from "zod";
 import OpenAI from "openai";
-import { isAuthenticated } from "../replit_integrations/auth";
-import { authStorage } from "../replit_integrations/auth/storage";
+import { authenticate } from "../auth/independentAuth";
+import { storage } from "../storage";
 import { aiStorage } from "./storage";
 
 const AI_DISCLAIMER = "\n\n---\nConteudo gerado por IA. Revisar sempre com julgamento clinico.";
@@ -34,17 +34,17 @@ const createPromptSchema = z.object({
 });
 
 export function registerAiRoutes(app: Express) {
-  const getUserId = (req: any) => req.user?.claims?.sub;
+  const getUserId = (req: any) => req.userId;
 
   const checkAdmin = async (req: any, res: any, next: any) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    const user = await authStorage.getUser(userId);
+    const user = await storage.getUser(userId);
     if (user?.role !== "admin") return res.status(403).json({ message: "Forbidden: Admin only" });
     next();
   };
 
-  app.get("/api/ai/credentials", isAuthenticated, async (req: any, res) => {
+  app.get("/api/ai/credentials", authenticate, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const creds = await aiStorage.getMaskedCredentials(userId);
@@ -55,7 +55,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.post("/api/ai/credentials", isAuthenticated, async (req: any, res) => {
+  app.post("/api/ai/credentials", authenticate, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const data = saveCredentialsSchema.parse(req.body);
@@ -74,7 +74,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/ai/credentials", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/ai/credentials", authenticate, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       await aiStorage.deleteCredentials(userId);
@@ -85,7 +85,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.post("/api/ai/test", isAuthenticated, async (req: any, res) => {
+  app.post("/api/ai/test", authenticate, async (req: any, res) => {
     try {
       const data = testCredentialsSchema.parse(req.body);
       
@@ -112,7 +112,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.post("/api/ai/test-stored", isAuthenticated, async (req: any, res) => {
+  app.post("/api/ai/test-stored", authenticate, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const apiKey = await aiStorage.getDecryptedApiKey(userId);
@@ -146,7 +146,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.post("/api/ai/chat", isAuthenticated, async (req: any, res) => {
+  app.post("/api/ai/chat", authenticate, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const data = chatSchema.parse(req.body);
@@ -208,7 +208,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.get("/api/ai/prompts", isAuthenticated, async (req, res) => {
+  app.get("/api/ai/prompts", authenticate, async (req, res) => {
     try {
       const prompts = await aiStorage.getActivePrompts();
       res.json(prompts);
@@ -218,7 +218,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.get("/api/admin/ai/prompts", isAuthenticated, checkAdmin, async (req, res) => {
+  app.get("/api/admin/ai/prompts", authenticate, checkAdmin, async (req, res) => {
     try {
       const prompts = await aiStorage.getAllPrompts();
       res.json(prompts);
@@ -227,7 +227,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/ai/prompts", isAuthenticated, checkAdmin, async (req: any, res) => {
+  app.post("/api/admin/ai/prompts", authenticate, checkAdmin, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       const data = createPromptSchema.parse(req.body);
@@ -238,7 +238,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.put("/api/admin/ai/prompts/:id", isAuthenticated, checkAdmin, async (req, res) => {
+  app.put("/api/admin/ai/prompts/:id", authenticate, checkAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const data = createPromptSchema.partial().parse(req.body);
@@ -249,7 +249,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/admin/ai/prompts/:id", isAuthenticated, checkAdmin, async (req, res) => {
+  app.delete("/api/admin/ai/prompts/:id", authenticate, checkAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       await aiStorage.deletePrompt(id);
@@ -259,7 +259,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.get("/api/admin/ai/settings", isAuthenticated, checkAdmin, async (req, res) => {
+  app.get("/api/admin/ai/settings", authenticate, checkAdmin, async (req, res) => {
     try {
       const settings = await aiStorage.getAllSettings();
       res.json(settings);
@@ -268,7 +268,7 @@ export function registerAiRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/ai/settings", isAuthenticated, checkAdmin, async (req, res) => {
+  app.post("/api/admin/ai/settings", authenticate, checkAdmin, async (req, res) => {
     try {
       const { key, value, description } = req.body;
       const setting = await aiStorage.setSetting(key, value, description);
