@@ -2760,70 +2760,90 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
   
   // Get current plan (legacy)
   app.get("/api/subscription/plan", async (req, res) => {
-    const plan = await storage.getActivePlan();
-    if (!plan) {
-      return res.json({ 
-        name: "Salva Plantão Premium", 
-        priceCents: 2990, 
-        billingPeriod: "monthly" 
-      });
+    try {
+      const plan = await storage.getActivePlan();
+      if (!plan) {
+        return res.json({ 
+          name: "Salva Plantão Premium", 
+          priceCents: 2990, 
+          billingPeriod: "monthly" 
+        });
+      }
+      res.json(plan);
+    } catch (error) {
+      console.error("[SUBSCRIPTION] Error fetching active plan:", error);
+      res.status(500).json({ error: "Failed to fetch subscription plan" });
     }
-    res.json(plan);
   });
 
   // Get all available plans
   app.get("/api/subscription/plans", async (_req, res) => {
-    const allPlans = await storage.getPlans();
-    const activePlans = allPlans.filter(p => p.isActive);
-    
-    if (activePlans.length === 0) {
-      // Return default plans if none exist
-      return res.json([
-        { id: 0, slug: 'mensal', name: 'Plano Mensal', priceCents: 2990, billingPeriod: 'monthly', cycle: 'MONTHLY' },
-        { id: 0, slug: 'semestral', name: 'Plano Semestral', priceCents: 14990, billingPeriod: 'semiannually', cycle: 'SEMIANNUALLY' },
-        { id: 0, slug: 'anual', name: 'Plano Anual', priceCents: 27990, billingPeriod: 'yearly', cycle: 'YEARLY' },
-      ]);
+    try {
+      const allPlans = await storage.getPlans();
+      const activePlans = allPlans.filter(p => p.isActive);
+      
+      if (activePlans.length === 0) {
+        // Return default plans if none exist
+        return res.json([
+          { id: 0, slug: 'mensal', name: 'Plano Mensal', priceCents: 2990, billingPeriod: 'monthly', cycle: 'MONTHLY' },
+          { id: 0, slug: 'semestral', name: 'Plano Semestral', priceCents: 14990, billingPeriod: 'semiannually', cycle: 'SEMIANNUALLY' },
+          { id: 0, slug: 'anual', name: 'Plano Anual', priceCents: 27990, billingPeriod: 'yearly', cycle: 'YEARLY' },
+        ]);
+      }
+      res.json(activePlans);
+    } catch (error) {
+      console.error("[SUBSCRIPTION] Error fetching plans:", error);
+      res.status(500).json({ error: "Failed to fetch subscription plans" });
     }
-    res.json(activePlans);
   });
 
   // Get user subscription status
   app.get("/api/subscription/status", authenticate, async (req, res) => {
-    const userId = getUserId(req);
-    const user = await storage.getUser(userId);
-    const subscription = await storage.getActiveSubscription(userId);
-    
-    res.json({
-      hasActiveSubscription: !!subscription,
-      subscription,
-      userStatus: user?.status || "pending",
-      isAdmin: user?.role === "admin"
-    });
+    try {
+      const userId = getUserId(req);
+      const user = await storage.getUser(userId);
+      const subscription = await storage.getActiveSubscription(userId);
+      
+      res.json({
+        hasActiveSubscription: !!subscription,
+        subscription,
+        userStatus: user?.status || "pending",
+        isAdmin: user?.role === "admin"
+      });
+    } catch (error) {
+      console.error("[SUBSCRIPTION] Error fetching status:", error);
+      res.status(500).json({ error: "Failed to fetch subscription status" });
+    }
   });
 
   // Validate coupon for subscription
   app.post("/api/subscription/validate-coupon", authenticate, async (req, res) => {
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ message: "Código do cupom é obrigatório" });
-    
-    const coupon = await storage.getPromoCouponByCode(code.toUpperCase().trim());
-    if (!coupon) return res.status(404).json({ message: "Cupom não encontrado" });
-    if (!coupon.isActive) return res.status(400).json({ message: "Cupom inativo" });
-    if (coupon.validUntil && new Date(coupon.validUntil) < new Date()) {
-      return res.status(400).json({ message: "Cupom expirado" });
+    try {
+      const { code } = req.body;
+      if (!code) return res.status(400).json({ message: "Código do cupom é obrigatório" });
+      
+      const coupon = await storage.getPromoCouponByCode(code.toUpperCase().trim());
+      if (!coupon) return res.status(404).json({ message: "Cupom não encontrado" });
+      if (!coupon.isActive) return res.status(400).json({ message: "Cupom inativo" });
+      if (coupon.validUntil && new Date(coupon.validUntil) < new Date()) {
+        return res.status(400).json({ message: "Cupom expirado" });
+      }
+      if (coupon.maxUses && coupon.currentUses && coupon.currentUses >= coupon.maxUses) {
+        return res.status(400).json({ message: "Cupom esgotado" });
+      }
+      
+      res.json({
+        valid: true,
+        id: coupon.id,
+        code: coupon.code,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+        discountMonths: coupon.discountMonths
+      });
+    } catch (error) {
+      console.error("[SUBSCRIPTION] Error validating coupon:", error);
+      res.status(500).json({ error: "Failed to validate coupon" });
     }
-    if (coupon.maxUses && coupon.currentUses && coupon.currentUses >= coupon.maxUses) {
-      return res.status(400).json({ message: "Cupom esgotado" });
-    }
-    
-    res.json({
-      valid: true,
-      id: coupon.id,
-      code: coupon.code,
-      discountType: coupon.discountType,
-      discountValue: coupon.discountValue,
-      discountMonths: coupon.discountMonths
-    });
   });
 
   // Create subscription with payment
