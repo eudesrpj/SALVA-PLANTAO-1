@@ -52,3 +52,4 @@ test-db-connection.js
 # configs temporários
 # =========================
 vite.config.ts.*
+CALENDARIO_FIX_REPORT.md

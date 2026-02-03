@@ -115,14 +115,16 @@ export type InsertBillingOrder = z.infer<typeof insertBillingOrderSchema>;
 // Webhook Events (audit + idempotency)
 export const webhookEvents = pgTable("webhook_events", {
   id: serial("id").primaryKey(),
+  provider: text("provider").default("asaas"), // asaas, stripe, etc
   eventType: text("event_type").notNull(),
-  eventKey: text("event_key").notNull(),
+  eventKey: text("event_key").notNull(), // provider:event:payment_id (unique constraint for idempotency)
+  payload: jsonb("payload").notNull(), // Complete webhook payload
+  status: text("status").default("received"), // received, processed, error
   receivedAt: timestamp("received_at").defaultNow(),
-  processedAt: timestamp("processed_at"),
-  processingStatus: text("processing_status").default("pending"), // pending, processed, failed
-  rawPayload: jsonb("raw_payload").notNull(),
+  processedAt: timestamp("processed_at"), // When successfully processed
+  errorMessage: text("error_message"), // Error details if status = error
 }, (table) => [
-  unique("webhook_events_event_key_key").on(table.eventKey),
+  unique("webhook_events_event_key_key").on(table.eventKey), // Ensure idempotency
 ]);
 
 export const insertWebhookEventSchema = createInsertSchema(webhookEvents).omit({ id: true, receivedAt: true, processedAt: true });
