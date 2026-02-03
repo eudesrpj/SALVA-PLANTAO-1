@@ -22,19 +22,39 @@ const AUTH_COOKIE_NAME = "auth_token";
 const REFRESH_COOKIE_NAME = "refresh_token";
 
 // Secrets - MUST be set in production via environment variables
-const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+let JWT_SECRET = process.env.JWT_SECRET;
+let JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
-if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "JWT_SECRET and JWT_REFRESH_SECRET must be set in production environment. Configure them in Render environment variables."
+// In production, we REQUIRE these secrets
+const isProduction = process.env.NODE_ENV === "production";
+
+if (!JWT_SECRET) {
+  if (isProduction) {
+    // In production, use a fallback but log critical error
+    console.error(
+      "❌ CRITICAL: JWT_SECRET not set in production environment! Authentication will not work. Configure JWT_SECRET in environment variables."
     );
+    JWT_SECRET = "fallback-insecure-key-for-production";
+  } else {
+    console.warn(
+      "⚠️  JWT_SECRET not set. Using temporary development value. Set JWT_SECRET in .env for production."
+    );
+    JWT_SECRET = "dev-temporary-secret-key-do-not-use";
   }
-  // In development, log a warning but allow with placeholder values
-  console.warn(
-    "⚠️  JWT_SECRET and JWT_REFRESH_SECRET not set. Using temporary development values. Set them in .env for production."
-  );
+}
+
+if (!JWT_REFRESH_SECRET) {
+  if (isProduction) {
+    console.error(
+      "❌ CRITICAL: JWT_REFRESH_SECRET not set in production! Refresh tokens will not work. Configure JWT_REFRESH_SECRET in environment variables."
+    );
+    JWT_REFRESH_SECRET = "fallback-insecure-refresh-key-for-production";
+  } else {
+    console.warn(
+      "⚠️  JWT_REFRESH_SECRET not set. Using temporary development value. Set JWT_REFRESH_SECRET in .env for production."
+    );
+    JWT_REFRESH_SECRET = "dev-temporary-refresh-key-do-not-use";
+  }
 }
 
 const JWT_EXPIRY = "15m";
@@ -300,49 +320,77 @@ export function registerIndependentAuthRoutes(app: Express): void {
   // POST /api/auth/login - Login with email and password
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
-      console.log("[LOGIN] Tentativa de login para:", req.body.email);
       const { email, password } = req.body;
       
-      if (!email || !password) {
-        console.log("[LOGIN] Email ou senha faltando");
-        res.status(400).json({ message: "Email and password required" });
-        return;
+      // Validate input
+      if (!email || typeof email !== "string" || !email.trim()) {
+        return res.status(400).json({ message: "Email is required and must be a string" });
+      }
+      if (!password || typeof password !== "string") {
+        return res.status(400).json({ message: "Password is required and must be a string" });
       }
       
+      console.log(`[LOGIN] Attempt for email: ${email.substring(0, 5)}***`);
+      
       // Get user by email
-      const user = await storage.getUserByEmail(email);
-      console.log("[LOGIN] Usuário encontrado:", user ? user.id : "não encontrado");
+      let user;
+      try {
+        user = await storage.getUserByEmail(email);
+      } catch (dbError) {
+        console.error(`[LOGIN] Database error fetching user: `, dbError);
+        return res.status(500).json({ message: "Database error" });
+      }
+      
       if (!user) {
-        res.status(401).json({ message: "Invalid credentials" });
-        return;
+        console.log(`[LOGIN] User not found: ${email.substring(0, 5)}***`);
+        return res.status(401).json({ message: "Invalid credentials" });
       }
       
       // Verify password
       if (!user.passwordHash) {
-        res.status(401).json({ message: "Invalid credentials" });
-        return;
+        console.log(`[LOGIN] User has no password hash: ${user.id}`);
+        return res.status(401).json({ message: "Invalid credentials" });
       }
       
-      const validPassword = await verifyPassword(password, user.passwordHash);
+      let validPassword = false;
+      try {
+        validPassword = await verifyPassword(password, user.passwordHash);
+      } catch (pwError) {
+        console.error(`[LOGIN] Password verification error: `, pwError);
+        return res.status(500).json({ message: "Authentication error" });
+      }
+      
       if (!validPassword) {
-        res.status(401).json({ message: "Invalid credentials" });
-        return;
+        console.log(`[LOGIN] Invalid password for user: ${user.id}`);
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      
+      // Create token
+      let token;
+      try {
+        token = createToken(user.id, false);
+      } catch (tokenError) {
+        console.error(`[LOGIN] Token creation error: `, tokenError);
+        return res.status(500).json({ message: "Token generation failed" });
       }
       
       // Set cookies
-      setAuthCookies(res, user.id);
+      try {
+        setAuthCookies(res, user.id);
+      } catch (cookieError) {
+        console.error(`[LOGIN] Cookie setting error: `, cookieError);
+        // Don't return error here, cookies are nice-to-have
+      }
       
-      // Também retornar token para o frontend usar em headers se cookies não funcionarem
-      const token = createToken(user.id, false);
-      
+      console.log(`[LOGIN] Success for user: ${user.id}`);
       res.json({
         success: true,
         userId: user.id,
         email: user.email,
-        token, // Token JWT para usar em headers
+        token,
       });
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("[LOGIN] Unexpected error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });

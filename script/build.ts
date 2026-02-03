@@ -1,6 +1,7 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
+import { execSync } from "child_process";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -33,6 +34,18 @@ const allowlist = [
 ];
 
 async function buildAll() {
+  // Capture build metadata
+  let buildSha = "unknown";
+  let buildTime = new Date().toISOString();
+
+  try {
+    buildSha = execSync("git rev-parse --short HEAD", { encoding: "utf-8" })
+      .trim()
+      .split(" ")[0];
+  } catch (e) {
+    console.warn("[WARN] Could not get git SHA, using 'unknown'");
+  }
+
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");
@@ -54,6 +67,8 @@ async function buildAll() {
     outfile: "dist/index.cjs",
     define: {
       "process.env.NODE_ENV": '"production"',
+      "process.env.BUILD_SHA": `"${buildSha}"`,
+      "process.env.BUILD_TIME": `"${buildTime}"`,
     },
     minify: true,
     external: externals,
