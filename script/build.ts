@@ -46,6 +46,9 @@ async function buildAll() {
     console.warn("[WARN] Could not get git SHA, using 'unknown'");
   }
 
+  console.log(`[BUILD] Git SHA: ${buildSha}`);
+  console.log(`[BUILD] Build Time: ${buildTime}`);
+
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");

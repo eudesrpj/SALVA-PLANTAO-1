@@ -12,7 +12,8 @@
     "test": "vitest --run",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "test:webhook": "node webhook-test.cjs"
+    "test:webhook": "node webhook-test.cjs",
+    "test:smoke": "node scripts/smoke-test.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
