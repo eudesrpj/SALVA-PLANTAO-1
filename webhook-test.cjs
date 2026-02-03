@@ -11,7 +11,10 @@
  * 4. Verifies that processedAt >= receivedAt
  */
 
+require('dotenv').config();
+
 const http = require('http');
+const { Client } = require('pg');
 
 const config = {
   host: 'localhost',
@@ -30,6 +33,73 @@ const testPayload = {
     dueDate: new Date().toISOString().split('T')[0],
   },
 };
+
+const eventKey = `asaas:${testPayload.event}:${testPayload.payment.id}`;
+
+function buildSslConfig(databaseUrl) {
+  try {
+    const url = new URL(databaseUrl);
+    const sslmode = url.searchParams.get('sslmode');
+
+    if (sslmode === 'require') {
+      return { rejectUnauthorized: true };
+    }
+
+    if (sslmode === 'no-verify') {
+      return { rejectUnauthorized: false };
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function validateDatabase() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.error('❌ DATABASE_URL não configurada. Não é possível validar o banco.');
+    process.exit(1);
+  }
+
+  const ssl = buildSslConfig(databaseUrl);
+  const client = new Client({ connectionString: databaseUrl, ssl });
+
+  try {
+    await client.connect();
+
+    const result = await client.query(
+      `SELECT COUNT(*)::int AS count,
+              MIN(received_at) AS received_at,
+              MIN(processed_at) AS processed_at,
+              (MIN(processed_at) >= MIN(received_at)) AS is_valid
+         FROM webhook_events
+        WHERE event_key = $1`,
+      [eventKey]
+    );
+
+    const row = result.rows[0] || { count: 0, received_at: null, processed_at: null };
+    const count = row.count || 0;
+    const receivedAt = row.received_at ? new Date(row.received_at) : null;
+    const processedAt = row.processed_at ? new Date(row.processed_at) : null;
+    const isValid = row.is_valid === true;
+
+    const hasValidCount = count === 1;
+    const hasValidTimestamps = !!receivedAt && !!processedAt && isValid;
+
+    return {
+      skipped: false,
+      count,
+      receivedAt,
+      processedAt,
+      hasValidCount,
+      hasValidTimestamps,
+      isValid,
+    };
+  } finally {
+    await client.end();
+  }
+}
 
 function makeRequest(payload, requestNumber) {
   return new Promise((resolve, reject) => {
@@ -141,6 +211,28 @@ async function runTests() {
     console.log('\n---\n');
 
     if (validation.request1Success && validation.request2Success) {
+      const dbValidation = await validateDatabase();
+
+      if (!dbValidation.skipped) {
+        console.log('---\n🗄️  DATABASE VALIDATION\n');
+        console.log(`📌 eventKey: ${eventKey}`);
+        console.log(`📌 COUNT = ${dbValidation.count}`);
+        console.log(`📌 received_at = ${dbValidation.receivedAt?.toISOString()}`);
+        console.log(`📌 processed_at = ${dbValidation.processedAt?.toISOString()}`);
+        console.log(`📌 processed_at >= received_at: ${dbValidation.isValid}`);
+        console.log('\n---\n');
+
+        if (!dbValidation.hasValidCount) {
+          console.error('❌ COUNT no banco não é 1 para o eventKey testado.');
+          process.exit(1);
+        }
+
+        if (!dbValidation.hasValidTimestamps) {
+          console.error('❌ processed_at < received_at ou timestamps ausentes.');
+          process.exit(1);
+        }
+      }
+
       if (validation.request2IsDuplicate) {
         console.log('✅ ALL TESTS PASSED!');
         console.log('   - Both webhooks returned 200 OK');
@@ -166,7 +258,11 @@ async function runTests() {
       process.exit(1);
     }
   } catch (err) {
-    console.error('❌ Error during test:', err.message);
+    const message = err?.message || String(err);
+    console.error('❌ Error during test:', message);
+    if (err?.stack) {
+      console.error(err.stack);
+    }
     process.exit(1);
   }
 }

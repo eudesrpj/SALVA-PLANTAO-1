@@ -3463,7 +3463,7 @@ export class DatabaseStorage implements IStorage {
     const [event] = await db.update(webhookEvents)
       .set({ 
           status: status === "failed" ? "error" : status,
-          processedAt: sql`now()`,
+        processedAt: sql`GREATEST(${webhookEvents.receivedAt}, now())`,
         errorMessage: errorMessage || null
       })
       .where(eq(webhookEvents.id, id))
