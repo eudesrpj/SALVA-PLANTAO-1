@@ -16,9 +16,14 @@ export function serveStatic(app: Express) {
   // arquivos estáticos (js, css, assets)
   app.use(express.static(distPath));
 
-  // SPA fallback — MAS NUNCA PARA /api OU /health
+  // SPA fallback — MAS NUNCA PARA /api, /health, /_debug
   app.use("*", (req, res, next) => {
-    if (req.path.startsWith("/api") || req.path.startsWith("/health")) {
+    // Skip API, health checks, and debug endpoints
+    if (
+      req.path.startsWith("/api") ||
+      req.path.startsWith("/health") ||
+      req.path.startsWith("/_debug")
+    ) {
       return next();
     }
 
@@ -28,6 +33,7 @@ export function serveStatic(app: Express) {
       return next();
     }
 
+    // Serve SPA fallback only for actual app routes
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

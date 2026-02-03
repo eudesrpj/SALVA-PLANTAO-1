@@ -52,6 +52,50 @@ const buildTime = process.env.BUILD_TIME || "unknown";
 
 app.set("trust proxy", 1);
 
+// ⚠️  CRITICAL: Health endpoints MUST be registered FIRST, before any other middleware
+// This ensures they're always available and not intercepted by static file serving
+let serverInstance: any = null;
+
+app.get("/health", (_req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    auth: "independent",
+    node: process.version,
+  });
+});
+
+app.get("/api/health", (req, res) => {
+  const apiBaseUrl =
+    process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  res.setHeader("Content-Type", "application/json");
+  res.json({
+    appName,
+    version: appVersion,
+    gitCommit: buildCommit,
+    buildTime,
+    serverTime: new Date().toISOString(),
+    apiBaseUrl,
+  });
+});
+
+app.get("/_debug/listen", (_req, res) => {
+  try {
+    const addr = serverInstance?.address?.() || "unknown";
+    res.setHeader("Content-Type", "application/json");
+    res.json({
+      pid: process.pid,
+      port: parseInt(process.env.PORT || "5000", 10),
+      envPort: process.env.PORT || null,
+      address: addr,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -178,23 +222,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// DEBUG: Listen state endpoint
-let serverInstance: any = null;
-app.get("/_debug/listen", (_req, res) => {
-  try {
-    const addr = serverInstance?.address?.() || "unknown";
-    res.setHeader("Content-Type", "application/json");
-    res.json({
-      pid: process.pid,
-      port: parseInt(process.env.PORT || "5000", 10),
-      envPort: process.env.PORT || null,
-      address: addr,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(500).json({ error: String(error) });
-  }
-});
+// (serverInstance já foi declarado no topo, será atribuído depois)
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
