@@ -272,11 +272,11 @@ export function registerBillingRoutes(app: Express) {
       
       if (existingEvent) {
         // Event already recorded in DB
-          if (existingEvent.processingStatus === "processed") {
+          if (existingEvent.status === "processed") {
           // ✅ Already successfully processed - return 200 (Idempotent!)
           console.log(`[WEBHOOK] Event already processed: ${eventKey}`);
           return res.json({ received: true, duplicate: true, processedAt: existingEvent.processedAt });
-          } else if (existingEvent.processingStatus === "failed") {
+          } else if (existingEvent.status === "error") {
           // ⚠️ Previous attempt failed - log but return 200 to avoid retry loop
           console.log(`[WEBHOOK] Event previously failed: ${eventKey}, retrying...`);
           // Fall through to retry processing
@@ -291,7 +291,7 @@ export function registerBillingRoutes(app: Express) {
           eventType: event,
           eventKey,
           payload: req.body,
-            processingStatus: "pending"
+            status: "received"
         });
         console.log(`[WEBHOOK] Event recorded: id=${webhookRecord.id}, eventKey=${eventKey}`);
       }

@@ -3462,8 +3462,7 @@ export class DatabaseStorage implements IStorage {
   async markWebhookEventProcessed(id: number, status: "processed" | "failed" = "processed", errorMessage?: string): Promise<WebhookEvent | undefined> {
     const [event] = await db.update(webhookEvents)
       .set({ 
-        status, 
-          processingStatus: status,
+          status: status === "failed" ? "error" : status,
           processedAt: sql`now()`,
         errorMessage: errorMessage || null
       })
