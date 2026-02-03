@@ -300,15 +300,18 @@ export function registerIndependentAuthRoutes(app: Express): void {
   // POST /api/auth/login - Login with email and password
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
+      console.log("[LOGIN] Tentativa de login para:", req.body.email);
       const { email, password } = req.body;
       
       if (!email || !password) {
+        console.log("[LOGIN] Email ou senha faltando");
         res.status(400).json({ message: "Email and password required" });
         return;
       }
       
       // Get user by email
       const user = await storage.getUserByEmail(email);
+      console.log("[LOGIN] Usuário encontrado:", user ? user.id : "não encontrado");
       if (!user) {
         res.status(401).json({ message: "Invalid credentials" });
         return;

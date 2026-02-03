@@ -79,10 +79,13 @@ app.use(express.urlencoded({ extended: false }));
 
 // CORS middleware
 app.use((req, res, next) => {
-  // Allow any origin to make requests with cookies
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin || "*";
+  
+  // Allow the request origin with credentials
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Cookie");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Cookie, X-Requested-With");
   res.setHeader("Access-Control-Expose-Headers", "Set-Cookie");
   
   // Handle preflight OPTIONS requests

@@ -174,19 +174,24 @@ export function registerAuthRoutes(app: Express) {
   // Login por senha (dev/fallback)
   app.post("/api/auth/login-password", async (req, res) => {
     try {
+      console.log("[LOGIN-PASSWORD] Tentativa de login:", req.body.email);
       const { email, password } = req.body;
       
       if (!email || !password) {
+        console.log("[LOGIN-PASSWORD] Email ou senha faltando");
         return res.status(400).json({ message: "Email e senha são obrigatórios" });
       }
       
-      const user = await authStorage.getUserByEmail(email);
+      const user = await storage.getUserByEmail(email);
+      console.log("[LOGIN-PASSWORD] Usuário encontrado:", user ? user.id : "não encontrado");
       
       if (!user || !user.passwordHash) {
+        console.log("[LOGIN-PASSWORD] Usuário sem senha ou não existe");
         return res.status(401).json({ message: "Credenciais inválidas" });
       }
       
       const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+      console.log("[LOGIN-PASSWORD] Senha válida:", isValidPassword);
       
       if (!isValidPassword) {
         return res.status(401).json({ message: "Credenciais inválidas" });
@@ -194,6 +199,7 @@ export function registerAuthRoutes(app: Express) {
       
       // Set auth cookies (mesma forma que o sistema JWT)
       setAuthCookies(res, user.id);
+      console.log("[LOGIN-PASSWORD] Cookies setados para userId:", user.id);
       
       // Também retornar token para o frontend usar em headers
       const token = createToken(user.id, false);
@@ -211,8 +217,9 @@ export function registerAuthRoutes(app: Express) {
           profileImageUrl: user.profileImageUrl
         }
       });
+      console.log("[LOGIN-PASSWORD] Login bem-sucedido para:", user.email);
     } catch (error) {
-      console.error("Password login error:", error);
+      console.error("[LOGIN-PASSWORD] Erro no login:", error);
       res.status(500).json({ message: "Erro interno" });
     }
   });
