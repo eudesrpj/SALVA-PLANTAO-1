@@ -2772,7 +2772,11 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
       res.json(plan);
     } catch (error) {
       console.error("[SUBSCRIPTION] Error fetching active plan:", error);
-      res.status(500).json({ error: "Failed to fetch subscription plan" });
+      res.json({ 
+        name: "Salva Plantão Premium", 
+        priceCents: 2990, 
+        billingPeriod: "monthly" 
+      });
     }
   });
 
@@ -2793,7 +2797,11 @@ IMPORTANTE: Este é um RASCUNHO que será revisado por um médico antes de publi
       res.json(activePlans);
     } catch (error) {
       console.error("[SUBSCRIPTION] Error fetching plans:", error);
-      res.status(500).json({ error: "Failed to fetch subscription plans" });
+      res.json([
+        { id: 0, slug: 'mensal', name: 'Plano Mensal', priceCents: 2990, billingPeriod: 'monthly', cycle: 'MONTHLY' },
+        { id: 0, slug: 'semestral', name: 'Plano Semestral', priceCents: 14990, billingPeriod: 'semiannually', cycle: 'SEMIANNUALLY' },
+        { id: 0, slug: 'anual', name: 'Plano Anual', priceCents: 27990, billingPeriod: 'yearly', cycle: 'YEARLY' },
+      ]);
     }
   });
 
