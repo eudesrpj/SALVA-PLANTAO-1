@@ -564,6 +564,7 @@ export interface IStorage {
     lastName?: string;
     profileImageUrl?: string | null;
   }): Promise<typeof users.$inferSelect>;
+  upsertUser(data: Partial<typeof users.$inferSelect> & { email?: string | null }): Promise<typeof users.$inferSelect>;
   updateUser(id: string, data: Partial<typeof users.$inferSelect>): Promise<typeof users.$inferSelect>;
   getAllUsers(): Promise<(typeof users.$inferSelect)[]>;
   updateUserStatus(id: string, status: "active" | "pending" | "blocked"): Promise<typeof users.$inferSelect>;
@@ -3759,6 +3760,35 @@ export class DatabaseStorage implements IStorage {
       role: "user", // Default role
     }).returning();
     return user;
+  }
+
+  async upsertUser(data: Partial<typeof users.$inferSelect> & { email?: string | null }): Promise<typeof users.$inferSelect> {
+    const email = data.email || null;
+    if (!email) throw new Error("Email is required for upsertUser");
+    
+    const existing = await this.getUserByEmail(email);
+    if (existing) {
+      const updateData: any = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (value !== undefined && value !== null && key !== 'id' && key !== 'email') {
+          updateData[key] = value;
+        }
+      }
+      if (Object.keys(updateData).length > 0) {
+        const [updated] = await db.update(users).set(updateData).where(eq(users.id, existing.id)).returning();
+        return updated;
+      }
+      return existing;
+    }
+    
+    const createData: any = { email };
+    for (const [key, value] of Object.entries(data)) {
+      if (key !== 'id' && key !== 'email' && value !== undefined) {
+        createData[key] = value === null ? null : value;
+      }
+    }
+    const [created] = await db.insert(users).values(createData).returning();
+    return created;
   }
 
   async updateUser(id: string, data: Partial<typeof users.$inferSelect>): Promise<typeof users.$inferSelect> {

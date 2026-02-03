@@ -17,45 +17,49 @@ import { setupWebSocket } from "./websocket";
 
 const app = express();
 const httpServer = createServer(app);
-// Em CommonJS (build), import.meta.url é undefined, então usamos process.cwd()
-const __dirname: string = import.meta?.url 
-  ? path.dirname(fileURLToPath(import.meta.url))
-  : process.cwd();
+
+// Em CommonJS (build), import.meta.url pode não existir/funcionar; usar process.cwd() é mais estável.
+const __dirname: string =
+  typeof import.meta !== "undefined" && (import.meta as any)?.url
+    ? path.dirname(fileURLToPath((import.meta as any).url))
+    : process.cwd();
 
 const appName = process.env.APP_NAME || "Salva Plantão";
+
 const appVersion = (() => {
   try {
-    // Em produção (CommonJS), __dirname aponta para dist/, então package.json está em ../
-    // Em dev (ESM), __dirname aponta para server/, então package.json está em ../
-    // Usar sempre process.cwd() para evitar path relativo errado
     const packageJsonPath = path.resolve(process.cwd(), "package.json");
     const raw = readFileSync(packageJsonPath, "utf-8");
     const parsed = JSON.parse(raw);
     return parsed?.version || "1.0.0";
-  } catch (err) {
-    // Silenciar warning se package.json não encontrado (fallback seguro)
+  } catch {
     if (process.env.NODE_ENV === "development") {
-      console.warn("[WARN] Could not read package.json from:", path.resolve(process.cwd(), "package.json"));
+      console.warn(
+        "[WARN] Could not read package.json from:",
+        path.resolve(process.cwd(), "package.json"),
+      );
     }
     return process.env.APP_VERSION || "1.0.0";
   }
 })();
 
-const buildCommit = (process.env.BUILD_SHA || process.env.COMMIT_SHA || process.env.GIT_SHA || "unknown").split(" ")[0];
+const buildCommit = (process.env.BUILD_SHA ||
+  process.env.COMMIT_SHA ||
+  process.env.GIT_SHA ||
+  "unknown").split(" ")[0];
+
 const buildTime = process.env.BUILD_TIME || "unknown";
 
 app.set("trust proxy", 1);
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  // Não fazer exit em dev para não quebrar o servidor
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  // Não fazer exit em dev para não quebrar o servidor
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
 });
 
 // Setup WebSocket server for real-time notifications
@@ -77,29 +81,79 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-// CORS middleware
+/**
+ * CORS robusto:
+ * - credentials=true NÃO pode usar Access-Control-Allow-Origin="*"
+ * - usamos allowlist (APP_URL/FRONTEND_URL) + localhost para dev
+ * - requests sem Origin (curl/postman/server-to-server) são permitidos
+ */
+const allowedOrigins = [
+  process.env.APP_URL, // ex: https://appsalvaplantao.com.br
+  process.env.FRONTEND_URL, // se você separar front/back
+  process.env.PUBLIC_BASE_URL, // às vezes igual ao APP_URL
+  "http://localhost:5000",
+  "http://localhost:5173",
+  "http://localhost:3000",
+].filter(Boolean) as string[];
+
 app.use((req, res, next) => {
-  const origin = req.headers.origin || "*";
-  
-  // Allow the request origin with credentials
-  res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Cookie, X-Requested-With");
-  res.setHeader("Access-Control-Expose-Headers", "Set-Cookie");
-  
-  // Handle preflight OPTIONS requests
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+  const origin = req.headers.origin as string | undefined;
+
+  // Permite requisições sem Origin (curl/postman/backend-to-backend)
+  if (!origin) {
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, Cookie, X-Requested-With, x-asaas-webhook-token",
+    );
+    res.setHeader("Access-Control-Expose-Headers", "Set-Cookie");
+
+    if (req.method === "OPTIONS") {
+      res.sendStatus(204);
+      return;
+    }
+    next();
     return;
   }
-  
-  next();
+
+  // Allowlist: só libera origins conhecidos
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, Cookie, X-Requested-With, x-asaas-webhook-token",
+    );
+    res.setHeader("Access-Control-Expose-Headers", "Set-Cookie");
+
+    if (req.method === "OPTIONS") {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+    return;
+  }
+
+  // Bloqueia origem desconhecida (evita bug + evita brecha)
+  if (req.method === "OPTIONS") {
+    res.sendStatus(403);
+    return;
+  }
+  res.status(403).json({ error: `CORS blocked: ${origin}` });
 });
 
 // Health check endpoint - FIRST MIDDLEWARE, before anything else
 app.get("/health", (_req, res) => {
-  console.log("[DEBUG] /health endpoint called");
   res.setHeader("Content-Type", "application/json");
   res.json({
     status: "ok",
@@ -110,8 +164,8 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
-  console.log("[DEBUG] /api/health endpoint called");
-  const apiBaseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
+  const apiBaseUrl =
+    process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
   res.setHeader("Content-Type", "application/json");
   res.json({
     appName,
@@ -120,10 +174,11 @@ app.get("/api/health", (req, res) => {
     buildTime,
     serverTime: new Date().toISOString(),
     apiBaseUrl,
+    allowedOrigins,
   });
 });
 
-// DEBUG: Listen state endpoint (PASSO 3)
+// DEBUG: Listen state endpoint
 let serverInstance: any = null;
 app.get("/_debug/listen", (_req, res) => {
   try {
@@ -152,7 +207,6 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-
 console.log("Iniciando servidor...");
 
 // Wrap in async IIFE to support await in CJS
@@ -180,22 +234,20 @@ console.log("Iniciando servidor...");
     const message = err.message || "Internal Server Error";
 
     console.error("[DEBUG] Error handler invoked:", err);
-    
+
     if (!res.headersSent) {
       res.status(status).json({ message });
     }
   });
 
-  // ===== DIRECT LISTEN (proven working pattern) =====
   const port = parseInt(process.env.PORT || "5000", 10);
   const host = "0.0.0.0";
 
   console.log("[DEBUG] About to call httpServer.listen...");
 
-  // Setup error handlers BEFORE listening
-  httpServer.on('error', (error: any) => {
-    console.error('[CRITICAL] HTTP Server error event:', error);
-    if (error.code === 'EADDRINUSE') {
+  httpServer.on("error", (error: any) => {
+    console.error("[CRITICAL] HTTP Server error event:", error);
+    if (error.code === "EADDRINUSE") {
       console.error(`[CRITICAL] Port ${port} is already in use!`);
       process.exit(1);
     }
@@ -208,23 +260,20 @@ console.log("Iniciando servidor...");
     console.log(`========== SERVER READY ===========\n`);
   });
 
-  // Capture server reference for debug endpoint
   serverInstance = httpServer;
 
-  // Keep process alive
-  httpServer.on('close', () => {
-    console.log('⚠️  Server closed event fired');
+  httpServer.on("close", () => {
+    console.log("⚠️  Server closed event fired");
   });
 
-  process.on('beforeExit', (code) => {
-    console.log('⚠️  Process beforeExit with code:', code);
+  process.on("beforeExit", (code) => {
+    console.log("⚠️  Process beforeExit with code:", code);
   });
 
-  process.on('exit', (code) => {
-    console.log('⚠️  Process exit with code:', code);
+  process.on("exit", (code) => {
+    console.log("⚠️  Process exit with code:", code);
   });
 })().catch((err) => {
-  console.error('[CRITICAL] Failed to start server:', err);
+  console.error("[CRITICAL] Failed to start server:", err);
   process.exit(1);
 });
-
