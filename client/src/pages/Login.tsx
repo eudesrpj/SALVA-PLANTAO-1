@@ -87,7 +87,7 @@ export default function Login() {
           });
           
           if (subscriptionStatus?.hasActiveSubscription) {
-            navigate("/");
+            navigate("/dashboard");
           } else {
             navigate("/plans");
           }
@@ -153,7 +153,7 @@ export default function Login() {
           });
           
           if (subscriptionStatus?.hasActiveSubscription) {
-            navigate("/");
+            navigate("/dashboard");
           } else {
             navigate("/plans");
           }

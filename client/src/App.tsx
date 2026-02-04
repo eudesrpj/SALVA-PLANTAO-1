@@ -91,7 +91,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   const { user, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"/></div>;
-  if (!isAuthenticated) return <Redirect to="/welcome" />;
+  if (!isAuthenticated) return <Redirect to="/login" />;
 
   if (user?.status === 'blocked') {
     return <PaymentRequired />;
@@ -108,10 +108,10 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   const { user, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"/></div>;
-  if (!isAuthenticated) return <Redirect to="/welcome" />;
+  if (!isAuthenticated) return <Redirect to="/login" />;
   
   if (user?.role !== 'admin') {
-    return <Redirect to="/" />;
+    return <Redirect to="/dashboard" />
   }
 
   return (
@@ -124,17 +124,22 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
 function Router() {
   return (
     <Switch>
-      <Route path="/welcome" component={Landing} />
+      {/* Public Routes */}
+      <Route path="/" component={Landing} />
+      <Route path="/welcome">
+        <Redirect to="/" />
+      </Route>
       <Route path="/login" component={Login} />
       <Route path="/plans" component={Plans} />
       <Route path="/auth/magic" component={MagicLink} />
       <Route path="/auth/callback" component={AuthCallback} />
       
+      {/* Protected Routes */}
       <Route path="/admin">
         <AdminRoute component={Admin} />
       </Route>
 
-      <Route path="/">
+      <Route path="/dashboard">
         <ProtectedRoute component={Dashboard} />
       </Route>
 

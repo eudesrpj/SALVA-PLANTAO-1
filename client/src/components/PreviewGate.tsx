@@ -199,7 +199,7 @@ export function PreviewExpiredOverlay() {
 
   const handleBack = () => {
     // Redirect to landing page - this is safe since they're not logged out
-    setLocation("/welcome");
+    setLocation("/");
   };
 
   return (

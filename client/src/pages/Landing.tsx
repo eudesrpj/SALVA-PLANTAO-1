@@ -3,10 +3,18 @@ import { Button } from "@/components/ui/button";
 import { Check, ArrowRight, Star, Shield, Zap, Users } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { useAuth } from "@/hooks/use-auth";
+import { useEffect } from "react";
 
 export default function Landing() {
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user) {
+      navigate("/dashboard");
+    }
+  }, [isAuthenticated, isLoading, user, navigate]);
 
   const handleGoogleLogin = () => {
     window.location.href = "/api/auth/google/start";
