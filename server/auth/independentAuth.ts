@@ -319,79 +319,154 @@ export function registerIndependentAuthRoutes(app: Express): void {
   
   // POST /api/auth/login - Login with email and password
   app.post("/api/auth/login", async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    let userId = 'unknown';
+    let email = 'unknown';
+    
     try {
-      const { email, password } = req.body;
+      const { email: inputEmail, password } = req.body;
+      email = inputEmail?.substring?.(0, 5) + '***' || 'invalid';
+      
+      console.log(`[LOGIN] 🔑 Attempt for email: ${email}, IP: ${req.ip || req.connection.remoteAddress}`);
       
       // Validate input
-      if (!email || typeof email !== "string" || !email.trim()) {
-        return res.status(400).json({ message: "Email is required and must be a string" });
+      if (!inputEmail || typeof inputEmail !== "string" || !inputEmail.trim()) {
+        console.log(`[LOGIN] ❌ Bad request: missing email`);
+        return res.status(400).json({ 
+          message: "Email is required and must be a string",
+          error: "MISSING_EMAIL"
+        });
       }
       if (!password || typeof password !== "string") {
-        return res.status(400).json({ message: "Password is required and must be a string" });
+        console.log(`[LOGIN] ❌ Bad request: missing password`);
+        return res.status(400).json({ 
+          message: "Password is required and must be a string",
+          error: "MISSING_PASSWORD"
+        });
       }
       
-      console.log(`[LOGIN] Attempt for email: ${email.substring(0, 5)}***`);
+      // Basic email format validation
+      if (!inputEmail.includes("@") || inputEmail.length < 5) {
+        console.log(`[LOGIN] ❌ Bad request: invalid email format`);
+        return res.status(400).json({ 
+          message: "Invalid email format",
+          error: "INVALID_EMAIL_FORMAT"
+        });
+      }
       
       // Get user by email
       let user;
       try {
-        user = await storage.getUserByEmail(email);
-      } catch (dbError) {
-        console.error(`[LOGIN] Database error fetching user: `, dbError);
-        return res.status(500).json({ message: "Database error" });
+        user = await storage.getUserByEmail(inputEmail);
+        console.log(`[LOGIN] 📊 Database query completed in ${Date.now() - startTime}ms`);
+      } catch (dbError: any) {
+        console.error(`[LOGIN] 🚨 Database error fetching user: `, {
+          message: dbError.message,
+          stack: dbError.stack?.substring?.(0, 200),
+          email: email,
+          duration: Date.now() - startTime
+        });
+        return res.status(500).json({ 
+          message: "Database error",
+          error: "DB_ERROR"
+        });
       }
       
       if (!user) {
-        console.log(`[LOGIN] User not found: ${email.substring(0, 5)}***`);
-        return res.status(401).json({ message: "Invalid credentials" });
+        console.log(`[LOGIN] ❌ User not found: ${email}`);
+        return res.status(401).json({ 
+          message: "Invalid credentials",
+          error: "INVALID_CREDENTIALS"
+        });
       }
+      
+      userId = user.id;
       
       // Verify password
       if (!user.passwordHash) {
-        console.log(`[LOGIN] User has no password hash: ${user.id}`);
-        return res.status(401).json({ message: "Invalid credentials" });
+        console.log(`[LOGIN] ❌ User has no password hash: ${userId}`);
+        return res.status(401).json({ 
+          message: "Invalid credentials",
+          error: "INVALID_CREDENTIALS"
+        });
       }
       
       let validPassword = false;
+      const passwordStartTime = Date.now();
       try {
         validPassword = await verifyPassword(password, user.passwordHash);
-      } catch (pwError) {
-        console.error(`[LOGIN] Password verification error: `, pwError);
-        return res.status(500).json({ message: "Authentication error" });
+        console.log(`[LOGIN] 📊 Password verification completed in ${Date.now() - passwordStartTime}ms`);
+      } catch (pwError: any) {
+        console.error(`[LOGIN] 🚨 Password verification error: `, {
+          message: pwError.message,
+          userId: userId,
+          duration: Date.now() - passwordStartTime
+        });
+        return res.status(500).json({ 
+          message: "Authentication error",
+          error: "AUTH_ERROR"
+        });
       }
       
       if (!validPassword) {
-        console.log(`[LOGIN] Invalid password for user: ${user.id}`);
-        return res.status(401).json({ message: "Invalid credentials" });
+        console.log(`[LOGIN] ❌ Invalid password for user: ${userId}`);
+        return res.status(401).json({ 
+          message: "Invalid credentials",
+          error: "INVALID_CREDENTIALS"
+        });
       }
       
       // Create token
       let token;
+      const tokenStartTime = Date.now();
       try {
         token = createToken(user.id, false);
-      } catch (tokenError) {
-        console.error(`[LOGIN] Token creation error: `, tokenError);
-        return res.status(500).json({ message: "Token generation failed" });
+        console.log(`[LOGIN] 📊 Token creation completed in ${Date.now() - tokenStartTime}ms`);
+      } catch (tokenError: any) {
+        console.error(`[LOGIN] 🚨 Token creation error: `, {
+          message: tokenError.message,
+          userId: userId,
+          duration: Date.now() - tokenStartTime
+        });
+        return res.status(500).json({ 
+          message: "Token generation failed",
+          error: "TOKEN_ERROR"
+        });
       }
       
       // Set cookies
       try {
         setAuthCookies(res, user.id);
-      } catch (cookieError) {
-        console.error(`[LOGIN] Cookie setting error: `, cookieError);
+      } catch (cookieError: any) {
+        console.error(`[LOGIN] ⚠️  Cookie setting error (non-critical): `, {
+          message: cookieError.message,
+          userId: userId
+        });
         // Don't return error here, cookies are nice-to-have
       }
       
-      console.log(`[LOGIN] Success for user: ${user.id}`);
+      const totalDuration = Date.now() - startTime;
+      console.log(`[LOGIN] ✅ Success for user: ${userId}, total duration: ${totalDuration}ms`);
+      
       res.json({
         success: true,
         userId: user.id,
         email: user.email,
         token,
       });
-    } catch (error) {
-      console.error("[LOGIN] Unexpected error:", error);
-      res.status(500).json({ message: "Internal server error" });
+    } catch (error: any) {
+      const totalDuration = Date.now() - startTime;
+      console.error("[LOGIN] 🚨 Unexpected error:", {
+        message: error.message,
+        stack: error.stack?.substring?.(0, 200),
+        email: email,
+        userId: userId,
+        duration: totalDuration
+      });
+      res.status(500).json({ 
+        message: "Internal server error",
+        error: "INTERNAL_ERROR"
+      });
     }
   });
   
