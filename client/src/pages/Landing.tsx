@@ -1,13 +1,33 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Check, ArrowRight, Star, Shield, Zap, Users } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { 
+  Check, 
+  ArrowRight, 
+  Star, 
+  Shield, 
+  Zap, 
+  Users,
+  Stethoscope,
+  Brain,
+  Clock,
+  Award,
+  TrendingUp,
+  Heart,
+  UserCheck,
+  Sparkles,
+  PlayCircle,
+  FileText
+} from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { useAuth } from "@/hooks/use-auth";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function Landing() {
   const [, navigate] = useLocation();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const [animationStep, setAnimationStep] = useState(0);
 
   // Redirect authenticated users to dashboard
   useEffect(() => {
@@ -16,171 +36,323 @@ export default function Landing() {
     }
   }, [isAuthenticated, isLoading, user, navigate]);
 
+  // Animation sequence
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setAnimationStep((prev) => (prev + 1) % 3);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
   const handleGoogleLogin = () => {
     window.location.href = "/api/auth/google/start";
   };
 
+  const handleGetStarted = () => {
+    navigate("/login");
+  };
+
+  const stats = [
+    { number: "50K+", label: "Prescrições Geradas", icon: FileText },
+    { number: "2,500+", label: "Médicos Ativos", icon: UserCheck },
+    { number: "99.8%", label: "Uptime Garantido", icon: TrendingUp },
+    { number: "24/7", label: "Suporte Médico", icon: Heart },
+  ];
+
   const features = [
-    { icon: Zap, title: "IA Avançada", desc: "Assistente médico inteligente para prescrições e diagnósticos" },
-    { icon: Shield, title: "Seguro & Confiável", desc: "Dados criptografados e backup automático" },
-    { icon: Users, title: "Colaborativo", desc: "Compartilhe protocolos e receitas com sua equipe" },
+    { 
+      icon: Brain, 
+      title: "IA Médica Avançada", 
+      desc: "Assistente inteligente com base em protocolos médicos validados",
+      color: "from-purple-500 to-pink-500"
+    },
+    { 
+      icon: Shield, 
+      title: "Segurança Total", 
+      desc: "Dados criptografados, LGPD compliant, backup automático",
+      color: "from-green-500 to-emerald-500"
+    },
+    { 
+      icon: Clock, 
+      title: "Economia de Tempo", 
+      desc: "Reduza 70% do tempo em documentação médica",
+      color: "from-blue-500 to-cyan-500"
+    },
+    { 
+      icon: Users, 
+      title: "Colaboração", 
+      desc: "Compartilhe protocolos e conhecimento com sua equipe",
+      color: "from-orange-500 to-red-500"
+    },
+    { 
+      icon: Stethoscope, 
+      title: "Protocolos Atualizados", 
+      desc: "Base de dados sempre atualizada com últimas evidências",
+      color: "from-indigo-500 to-purple-500"
+    },
+    { 
+      icon: Award, 
+      title: "Certificação", 
+      desc: "Validado por especialistas e sociedades médicas",
+      color: "from-teal-500 to-green-500"
+    },
+  ];
+
+  const testimonials = [
+    {
+      name: "Dr. Maria Silva",
+      specialty: "Clínica Médica",
+      avatar: "MS",
+      text: "O Salva Plantão revolucionou minha prática. Economizo 2h por dia em documentação!"
+    },
+    {
+      name: "Dr. João Santos",
+      specialty: "Cardiologia",
+      avatar: "JS", 
+      text: "A IA é impressionante. Sugestões precisas baseadas em evidências científicas."
+    },
+    {
+      name: "Dra. Ana Costa",
+      specialty: "Pediatria",
+      avatar: "AC",
+      text: "Interface intuitiva e recursos completos. Indispensável no meu dia a dia."
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
       {/* Header */}
-      <header className="absolute top-0 left-0 right-0 z-10 px-4 py-6">
+      <header className="absolute top-0 left-0 right-0 z-20 px-4 py-4 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center shadow-lg">
               <span className="text-lg font-bold text-white">SP</span>
             </div>
             <span className="text-xl font-bold text-gray-900">Salva Plantão</span>
+            <Badge variant="secondary" className="ml-2 bg-emerald-100 text-emerald-700 border-emerald-200">
+              v2.0
+            </Badge>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             {!user && (
-              <Button
-                onClick={handleGoogleLogin}
-                variant="outline"
-                className="border-2"
-              >
-                <SiGoogle className="w-4 h-4 mr-2" />
-                Entrar com Google
-              </Button>
+              <>
+                <Button
+                  onClick={handleGetStarted}
+                  variant="ghost"
+                  className="text-gray-600 hover:text-gray-900"
+                >
+                  Entrar
+                </Button>
+                <Button
+                  onClick={handleGoogleLogin}
+                  className="bg-gradient-to-r from-emerald-500 to-blue-600 hover:from-emerald-600 hover:to-blue-700 text-white shadow-lg"
+                >
+                  <SiGoogle className="w-4 h-4 mr-2" />
+                  Começar Grátis
+                </Button>
+              </>
             )}
-            <Button onClick={() => navigate(user ? "/" : "/login")} variant="ghost" className="text-gray-700 hover:text-gray-900">
-              {user ? "Minha conta" : "Entrar"}
-            </Button>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 px-4">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-200/30 rounded-full mix-blend-multiply filter blur-3xl animate-pulse"></div>
-          <div className="absolute top-1/2 right-1/4 w-96 h-96 bg-blue-200/30 rounded-full mix-blend-multiply filter blur-3xl animate-pulse animation-delay-2000"></div>
-        </div>
-
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 text-emerald-700 text-sm font-medium mb-6">
-              <Star className="w-4 h-4 fill-emerald-600" />
-              <span>Plataforma #1 para médicos de plantão</span>
-            </div>
+      <section className="relative pt-20 pb-16 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 py-16">
+          <div className="text-center max-w-4xl mx-auto">
+            <Badge className="mb-6 bg-gradient-to-r from-emerald-500 to-blue-500 text-white border-0">
+              <Sparkles className="w-4 h-4 mr-1" />
+              Nova Versão com IA Avançada
+            </Badge>
             
             <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight">
-              Seu assistente médico
-              <span className="bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent"> inteligente</span>
+              O Futuro da
+              <span className="bg-gradient-to-r from-emerald-500 to-blue-600 bg-clip-text text-transparent">
+                {" "}Medicina Digital
+              </span>
             </h1>
             
-            <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-              Prescrições, protocolos, IA médica e muito mais. Tudo em um só lugar para otimizar seu plantão.
+            <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
+              Plataforma completa com IA médica, protocolos atualizados e ferramentas que economizam 
+              <strong className="text-emerald-600"> 2+ horas por dia</strong> na sua prática clínica.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button
-                onClick={handleGoogleLogin}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+              <Button 
+                onClick={handleGetStarted}
                 size="lg"
-                className="h-14 px-8 text-lg bg-white text-gray-900 border-2 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-all shadow-lg"
+                className="bg-gradient-to-r from-emerald-500 to-blue-600 hover:from-emerald-600 hover:to-blue-700 text-white shadow-lg text-lg px-8 py-4"
               >
-                <SiGoogle className="w-5 h-5 mr-3" />
-                Começar com Google
+                <PlayCircle className="w-5 h-5 mr-2" />
+                Começar Agora - Grátis
+                <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
               
-              <Button
-                onClick={() => navigate("/login")}
+              <Button 
+                variant="outline" 
                 size="lg"
-                className="h-14 px-8 text-lg bg-gradient-to-r from-emerald-500 to-blue-600 hover:from-emerald-600 hover:to-blue-700 text-white transition-all shadow-xl hover:shadow-2xl"
+                onClick={handleGoogleLogin}
+                className="border-2 border-gray-300 hover:border-emerald-500 text-lg px-8 py-4"
               >
-                Criar conta grátis
-                <ArrowRight className="w-5 h-5 ml-2" />
+                <SiGoogle className="w-5 h-5 mr-2" />
+                Login com Google
               </Button>
             </div>
 
-            <p className="text-sm text-gray-500 mt-4">
-              Teste grátis por 7 dias. Depois apenas <span className="font-bold text-emerald-600">R$ 29,90/mês</span>
+            {/* Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16">
+              {stats.map((stat, index) => (
+                <Card key={index} className="border-0 bg-white/70 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all duration-300">
+                  <CardContent className="p-6 text-center">
+                    <stat.icon className="w-8 h-8 mx-auto mb-3 text-emerald-500" />
+                    <div className="text-3xl font-bold text-gray-900 mb-1">{stat.number}</div>
+                    <div className="text-sm text-gray-600">{stat.label}</div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Background Animation */}
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute -top-40 -right-32 w-80 h-80 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-full opacity-10 animate-pulse" />
+          <div className="absolute -bottom-40 -left-32 w-80 h-80 bg-gradient-to-tr from-blue-400 to-emerald-500 rounded-full opacity-10 animate-pulse delay-1000" />
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-16">
+            <Badge className="mb-4 bg-blue-100 text-blue-700 border-blue-200">
+              Recursos Principais
+            </Badge>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Tudo que você precisa em <span className="text-emerald-600">uma plataforma</span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Ferramentas completas para modernizar sua prática médica e melhorar o atendimento aos pacientes
             </p>
           </div>
 
-          {/* Features Grid */}
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mt-20">
-            {features.map((feature, i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all border border-gray-100">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center mb-4">
-                  <feature.icon className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">{feature.title}</h3>
-                <p className="text-gray-600 text-sm">{feature.desc}</p>
-              </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {features.map((feature, index) => (
+              <Card 
+                key={index} 
+                className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 group hover:-translate-y-2"
+              >
+                <CardContent className="p-8">
+                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
+                    <feature.icon className="w-7 h-7 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3">{feature.title}</h3>
+                  <p className="text-gray-600 leading-relaxed">{feature.desc}</p>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section className="py-20 px-4 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Plano único e simples</h2>
-            <p className="text-xl text-gray-600">Acesso completo a todas as funcionalidades</p>
+      {/* Testimonials */}
+      <section className="py-20 bg-gradient-to-br from-gray-50 to-blue-50">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-16">
+            <Badge className="mb-4 bg-emerald-100 text-emerald-700 border-emerald-200">
+              Depoimentos
+            </Badge>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Médicos que <span className="text-emerald-600">confiam</span> em nós
+            </h2>
           </div>
 
-          <div className="max-w-lg mx-auto">
-            <div className="bg-gradient-to-br from-emerald-50 to-blue-50 rounded-3xl p-8 shadow-2xl border-2 border-emerald-200">
-              <div className="text-center mb-8">
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Plano Mensal</h3>
-                <div className="flex items-baseline justify-center gap-2">
-                  <span className="text-5xl font-bold text-gray-900">R$ 29</span>
-                  <span className="text-2xl text-gray-600">,90</span>
-                  <span className="text-gray-600">/mês</span>
-                </div>
-                <p className="text-sm text-emerald-600 font-semibold mt-2">7 dias grátis para testar</p>
-              </div>
-
-              <ul className="space-y-4 mb-8">
-                {[
-                  "Prescrições inteligentes com IA",
-                  "Protocolos médicos atualizados",
-                  "Calculadoras médicas",
-                  "Biblioteca de medicamentos",
-                  "Interconsulta com IA",
-                  "Sincronização em tempo real",
-                  "Suporte prioritário"
-                ].map((item, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <Check className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">{item}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Button
-                onClick={() => navigate("/subscribe")}
-                size="lg"
-                className="w-full h-14 text-lg bg-gradient-to-r from-emerald-500 to-blue-600 hover:from-emerald-600 hover:to-blue-700 text-white transition-all shadow-lg hover:shadow-xl"
-              >
-                Assinar agora
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-
-              <p className="text-xs text-center text-gray-600 mt-4">
-                Pagamento seguro via Asaas • Cancele a qualquer momento
-              </p>
-            </div>
+          <div className="grid md:grid-cols-3 gap-8">
+            {testimonials.map((testimonial, index) => (
+              <Card key={index} className="border-0 shadow-lg bg-white">
+                <CardContent className="p-8">
+                  <div className="flex items-center mb-6">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center text-white font-bold mr-4">
+                      {testimonial.avatar}
+                    </div>
+                    <div>
+                      <div className="font-bold text-gray-900">{testimonial.name}</div>
+                      <div className="text-sm text-gray-600">{testimonial.specialty}</div>
+                    </div>
+                  </div>
+                  <div className="flex mb-4">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
+                    ))}
+                  </div>
+                  <p className="text-gray-600 italic">"{testimonial.text}"</p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-8 px-4 bg-gray-50 border-t border-gray-200">
-        <div className="max-w-7xl mx-auto text-center text-sm text-gray-600">
-          <p>© 2026 Salva Plantão. Todos os direitos reservados.</p>
-          <p className="mt-2">
-            <a href="/terms" className="text-emerald-600 hover:text-emerald-700">Termos de Serviço</a>
-            {" · "}
-            <a href="/privacy" className="text-emerald-600 hover:text-emerald-700">Privacidade</a>
+      {/* CTA Final */}
+      <section className="py-20 bg-gradient-to-r from-emerald-500 to-blue-600">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <h2 className="text-4xl font-bold text-white mb-6">
+            Pronto para revolucionar sua prática médica?
+          </h2>
+          <p className="text-xl text-emerald-100 mb-8 max-w-2xl mx-auto">
+            Junte-se a milhares de médicos que já economizam tempo e melhoram seus atendimentos
           </p>
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button 
+              onClick={handleGetStarted}
+              size="lg"
+              className="bg-white text-emerald-600 hover:bg-gray-50 shadow-lg text-lg px-8 py-4 font-semibold"
+            >
+              Começar Gratuitamente
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="lg"
+              onClick={handleGoogleLogin}
+              className="border-2 border-white text-white hover:bg-white hover:text-emerald-600 text-lg px-8 py-4"
+            >
+              <SiGoogle className="w-5 h-5 mr-2" />
+              Login Rápido
+            </Button>
+          </div>
+          
+          <p className="text-emerald-100 mt-6 text-sm">
+            ✓ Teste grátis por 30 dias  •  ✓ Sem cartão de crédito  •  ✓ Suporte 24/7
+          </p>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-gray-300 py-12">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center shadow-lg">
+              <span className="text-lg font-bold text-white">SP</span>
+            </div>
+            <span className="text-xl font-bold text-white">Salva Plantão</span>
+          </div>
+          
+          <p className="text-gray-400 mb-4">
+            Plataforma médica digital líder no Brasil
+          </p>
+          
+          <div className="flex items-center justify-center gap-6 text-sm">
+            <span>© 2026 Salva Plantão</span>
+            <span>•</span>
+            <a href="mailto:suporte@appsalvaplantao.com" className="hover:text-emerald-400 transition-colors">
+              Suporte
+            </a>
+            <span>•</span>
+            <span>Desenvolvido com ❤️ para médicos</span>
+          </div>
         </div>
       </footer>
     </div>
