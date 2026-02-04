@@ -60,6 +60,7 @@ import Login from "@/pages/Login";
 import MagicLink from "@/pages/MagicLink";
 import AuthCallback from "@/pages/AuthCallback";
 import Plans from "@/pages/Plans";
+import Subscribe from "@/pages/Subscribe";
 // New hub pages
 import AtendimentoHub from "@/pages/AtendimentoHub";
 import FerramentasHub from "@/pages/FerramentasHub";
@@ -152,6 +153,7 @@ function Router() {
       </Route>
       <Route path="/login" component={Login} />
       <Route path="/plans" component={Plans} />
+      <Route path="/subscribe" component={Subscribe} />
       <Route path="/auth/magic" component={MagicLink} />
       <Route path="/auth/callback" component={AuthCallback} />
       

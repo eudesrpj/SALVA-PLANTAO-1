@@ -156,7 +156,7 @@ export default function Landing() {
               </ul>
 
               <Button
-                onClick={() => navigate("/plans")}
+                onClick={() => navigate("/subscribe")}
                 size="lg"
                 className="w-full h-14 text-lg bg-gradient-to-r from-emerald-500 to-blue-600 hover:from-emerald-600 hover:to-blue-700 text-white transition-all shadow-lg hover:shadow-xl"
               >

@@ -62,7 +62,7 @@ export function useAuthGuard(options: AuthGuardOptions): AuthGuardResult {
     }
 
     if (options.level === "subscribed" && !isSubscribed && !isAdmin) {
-      return "/plans";
+      return "/subscribe";
     }
 
     if (options.level === "admin" && !isAdmin) {

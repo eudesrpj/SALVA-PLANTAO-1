@@ -33,12 +33,12 @@ export function usePostLoginRedirect() {
       if (hasActiveSubscription) {
         navigate("/dashboard");
       } else {
-        navigate("/plans");
+        navigate("/subscribe");
       }
     } catch (error) {
       console.error("Error during post-login redirect:", error);
-      // Em caso de erro, ir para plans por segurança
-      navigate("/plans");
+      // Em caso de erro, ir para subscribe por segurança
+      navigate("/subscribe");
     }
   };
 
