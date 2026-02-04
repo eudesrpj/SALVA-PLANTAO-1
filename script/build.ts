@@ -37,6 +37,7 @@ async function buildAll() {
   // Capture build metadata
   let buildSha = "unknown";
   let buildTime = new Date().toISOString();
+  let deployTime = new Date().toISOString();
 
   try {
     buildSha = execSync("git rev-parse --short HEAD", { encoding: "utf-8" })
@@ -48,6 +49,7 @@ async function buildAll() {
 
   console.log(`[BUILD] Git SHA: ${buildSha}`);
   console.log(`[BUILD] Build Time: ${buildTime}`);
+  console.log(`[BUILD] Deploy Time: ${deployTime}`);
 
   await rm("dist", { recursive: true, force: true });
 
@@ -72,6 +74,7 @@ async function buildAll() {
       "process.env.NODE_ENV": '"production"',
       "process.env.BUILD_SHA": `"${buildSha}"`,
       "process.env.BUILD_TIME": `"${buildTime}"`,
+      "process.env.DEPLOY_TIME": `"${deployTime}"`,
     },
     minify: true,
     external: externals,

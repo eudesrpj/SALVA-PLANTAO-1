@@ -54,9 +54,11 @@ import Notifications from "@/pages/Notifications";
 import About from "@/pages/About";
 import BillingSuccess from "@/pages/BillingSuccess";
 import BillingCancel from "@/pages/BillingCancel";
+import BillingPix from "@/pages/BillingPix";
 import Login from "@/pages/Login";
 import MagicLink from "@/pages/MagicLink";
 import AuthCallback from "@/pages/AuthCallback";
+import Plans from "@/pages/Plans";
 // New hub pages
 import AtendimentoHub from "@/pages/AtendimentoHub";
 import FerramentasHub from "@/pages/FerramentasHub";
@@ -124,6 +126,7 @@ function Router() {
     <Switch>
       <Route path="/welcome" component={Landing} />
       <Route path="/login" component={Login} />
+      <Route path="/plans" component={Plans} />
       <Route path="/auth/magic" component={MagicLink} />
       <Route path="/auth/callback" component={AuthCallback} />
       
@@ -263,6 +266,7 @@ function Router() {
 
       <Route path="/billing/success" component={BillingSuccess} />
       <Route path="/billing/cancel" component={BillingCancel} />
+      <Route path="/billing/pix" component={BillingPix} />
 
       <Route component={NotFound} />
     </Switch>

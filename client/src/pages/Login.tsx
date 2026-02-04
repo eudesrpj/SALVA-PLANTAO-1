@@ -80,7 +80,20 @@ export default function Login() {
       const result = await queryClient.fetchQuery({ queryKey: ["/api/auth/me"] });
       
       if (result) {
-        navigate("/");
+        // Verificar se tem assinatura ativa
+        try {
+          const subscriptionStatus = await queryClient.fetchQuery({ 
+            queryKey: ["/api/subscription/status"] 
+          });
+          
+          if (subscriptionStatus?.hasActiveSubscription) {
+            navigate("/");
+          } else {
+            navigate("/plans");
+          }
+        } catch {
+          navigate("/plans");
+        }
       }
     } catch (error: any) {
       const msg = error.message || "Código inválido ou expirado";
@@ -131,8 +144,23 @@ export default function Login() {
       const result = await queryClient.fetchQuery({ queryKey: ["/api/auth/me"] });
       
       if (result) {
-        console.log("✓ Usuário autenticado, navegando para Dashboard");
-        navigate("/");
+        console.log("✓ Usuário autenticado, verificando assinatura");
+        
+        // Verificar se tem assinatura ativa
+        try {
+          const subscriptionStatus = await queryClient.fetchQuery({ 
+            queryKey: ["/api/subscription/status"] 
+          });
+          
+          if (subscriptionStatus?.hasActiveSubscription) {
+            navigate("/");
+          } else {
+            navigate("/plans");
+          }
+        } catch {
+          // Se falhar ao verificar assinatura, manda pra plans por segurança
+          navigate("/plans");
+        }
       } else {
         console.error("✗ Falha ao carregar dados do usuário");
         setError("Falha ao carregar dados do usuário");

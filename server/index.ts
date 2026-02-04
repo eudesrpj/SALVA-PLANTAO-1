@@ -71,12 +71,20 @@ app.get("/api/health", (req, res) => {
     process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
   res.setHeader("Content-Type", "application/json");
   res.json({
+    status: "healthy",
     appName,
     version: appVersion,
     gitCommit: buildCommit,
     buildTime,
+    deployTime: process.env.DEPLOY_TIME || buildTime,
     serverTime: new Date().toISOString(),
     apiBaseUrl,
+    environment: process.env.NODE_ENV || "development",
+    cloudRun: {
+      revision: process.env.K_REVISION || "local",
+      service: process.env.K_SERVICE || "local"
+    },
+    uptime: Math.floor(process.uptime())
   });
 });
 
