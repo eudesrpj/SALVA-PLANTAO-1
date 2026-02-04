@@ -10,6 +10,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
+import { useAuthGuard } from "@/hooks/use-auth-guard";
 import NotFound from "@/pages/not-found";
 import { DesktopSidebar, MobileNav } from "@/components/Sidebar";
 import { FloatingCalculator } from "@/components/FloatingCalculator";
@@ -88,10 +89,22 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { canAccess, isLoading, user } = useAuthGuard({ 
+    level: "subscribed",
+    redirectOnFail: true 
+  });
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"/></div>;
-  if (!isAuthenticated) return <Redirect to="/login" />;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"/>
+      </div>
+    );
+  }
+
+  if (!canAccess) {
+    return null; // Redirecionamento será feito pelo guard
+  }
 
   if (user?.status === 'blocked') {
     return <PaymentRequired />;
@@ -105,13 +118,21 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 
 function AdminRoute({ component: Component }: { component: React.ComponentType }) {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { canAccess, isLoading } = useAuthGuard({ 
+    level: "admin",
+    redirectOnFail: true 
+  });
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"/></div>;
-  if (!isAuthenticated) return <Redirect to="/login" />;
-  
-  if (user?.role !== 'admin') {
-    return <Redirect to="/dashboard" />
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"/>
+      </div>
+    );
+  }
+
+  if (!canAccess) {
+    return null; // Redirecionamento será feito pelo guard
   }
 
   return (
