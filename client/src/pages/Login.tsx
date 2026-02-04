@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { usePostLoginRedirect } from "@/hooks/use-post-login-redirect";
 import { Mail, Loader2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { apiRequest, tokenStorage } from "@/lib/queryClient";

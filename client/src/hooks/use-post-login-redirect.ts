@@ -20,11 +20,11 @@ export function usePostLoginRedirect() {
       // Buscar status de assinatura
       const subscriptionStatus = await queryClient.fetchQuery({ 
         queryKey: ["/api/preview/status"] 
-      });
+      }) as any;
       
       const userData = await queryClient.fetchQuery({ 
         queryKey: ["/api/auth/me"] 
-      });
+      }) as any;
       
       const isAdmin = userData?.role === "admin";
       const hasActiveSubscription = subscriptionStatus?.isSubscribed || isAdmin;
