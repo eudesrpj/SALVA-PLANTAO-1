@@ -1,0 +1,22 @@
+{
+  "platform": "render",
+  "buildCommand": "npm ci && npm run build",
+  "startCommand": "npm run start",
+  "nodeVersion": "18",
+  "memory": "512MB",
+  "cpu": "0.1",
+  "environmentVariables": {
+    "NODE_ENV": "production",
+    "PORT": "10000"
+  },
+  "requiredSecrets": [
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "JWT_REFRESH_SECRET"
+  ],
+  "optionalSecrets": [
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "EMAIL_SERVER"
+  ]
+}
